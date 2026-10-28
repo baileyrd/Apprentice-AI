@@ -174,6 +174,30 @@ impl Sim {
         }
     }
 
+    /// Moves `count` walls to random empty squares, never onto the agent or
+    /// its wake square. Returns how many moved (fewer if walls or room ran out).
+    pub fn move_walls(&mut self, count: usize) -> usize {
+        let mut moved = 0;
+        for _ in 0..count {
+            let Some(from) = self.rng.pick(&self.grid.positions_of(Cell::Wall)) else {
+                break;
+            };
+            let room: Vec<Pos> = self
+                .grid
+                .positions_of(Cell::Empty)
+                .into_iter()
+                .filter(|&p| p != self.pos && p != self.start)
+                .collect();
+            let Some(to) = self.rng.pick(&room) else {
+                break;
+            };
+            self.grid.set(from, Cell::Empty);
+            self.grid.set(to, Cell::Wall);
+            moved += 1;
+        }
+        moved
+    }
+
     /// Returns `(event, extra cost, gain)`.
     fn eat(&mut self) -> (Event, u32, u32) {
         if self.grid.get(self.pos) != Cell::Food {
@@ -271,6 +295,24 @@ mod tests {
         let out = sim.step(Action::Rest);
         assert!(out.slept);
         assert_eq!((sim.pos(), out.energy), (Pos { x: 0, y: 0 }, 50));
+    }
+
+    #[test]
+    fn moving_walls_keeps_their_count_and_spares_the_agent() {
+        let mut sim = Sim::new(Config::default(), 3).expect("room");
+        let before = sim.grid().positions_of(Cell::Wall);
+        let moved = sim.move_walls(before.len());
+        let after = sim.grid().positions_of(Cell::Wall);
+        assert_eq!((moved, after.len()), (before.len(), before.len()));
+        assert_ne!(before, after);
+        assert_ne!(sim.grid().get(sim.pos()), Cell::Wall);
+        assert_ne!(sim.grid().get(sim.start()), Cell::Wall);
+    }
+
+    #[test]
+    fn moving_walls_on_a_wall_free_grid_moves_none() {
+        let mut sim = corridor(Cell::Empty, Cell::Empty);
+        assert_eq!(sim.move_walls(3), 0);
     }
 
     #[test]
