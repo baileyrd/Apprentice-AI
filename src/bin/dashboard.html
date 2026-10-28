@@ -1,0 +1,296 @@
+<meta charset="utf-8">
+<title>Apprentice Replay</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: instrument panel. Summary readouts, then the two maps side by side, then one shared timeline. */
+:root {
+  --bg: #f3f5f7;
+  --panel: #ffffff;
+  --ink: #18212b;
+  --muted: #5b6875;
+  --rule: #d9dfe5;
+  --floor: #e9edf1;
+  --wall: #2c3742;
+  --food: #1baf7a;
+  --hazard: #eb6834;
+  --unknown: #c3cad1;
+  --accent: #2a78d6;
+  --wrong: #d03b52;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161c; --panel: #19212a; --ink: #e4e9ee; --muted: #93a0ad; --rule: #2b3642;
+    --floor: #222c36; --wall: #8796a5; --food: #2fc78f; --hazard: #f07a4b; --unknown: #39444f;
+    --accent: #5b9cf0; --wrong: #f0627a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161c; --panel: #19212a; --ink: #e4e9ee; --muted: #93a0ad; --rule: #2b3642;
+  --floor: #222c36; --wall: #8796a5; --food: #2fc78f; --hazard: #f07a4b; --unknown: #39444f;
+  --accent: #5b9cf0; --wrong: #f0627a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font: 15px/1.5 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 40px;
+}
+main { max-width: 1040px; margin: 0 auto; display: grid; gap: 20px; }
+h1 { font: 600 clamp(26px, 4vw, 34px)/1.1 var(--display); margin: 0; text-wrap: balance; }
+h2 { font: 600 13px/1.2 var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.lede { color: var(--muted); max-width: 65ch; margin: 6px 0 0; }
+.readouts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.readout { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 10px 14px; display: grid; gap: 2px; }
+.readout b { font: 500 22px/1.2 var(--mono); font-variant-numeric: tabular-nums; }
+.readout span { font-size: 12px; color: var(--muted); letter-spacing: .03em; }
+.maps { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+figure { margin: 0; display: grid; gap: 8px; min-width: 0; }
+canvas { display: block; width: 100%; max-width: 100%; }
+.map { aspect-ratio: 1; background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; }
+figcaption { font-size: 13px; color: var(--muted); }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+button, select {
+  font: 500 14px var(--body); color: var(--ink); background: var(--panel);
+  border: 1px solid var(--rule); border-radius: 6px; padding: 6px 12px; cursor: pointer;
+}
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); min-width: 84px; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#scrub { flex: 1 1 220px; accent-color: var(--accent); }
+#clock { font: 500 14px var(--mono); font-variant-numeric: tabular-nums; min-width: 9ch; }
+.chart { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; height: 230px; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); margin: 0; padding: 0; list-style: none; }
+.legend li { display: flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+.sw.line { height: 3px; }
+.sw.ring { background: transparent; border: 2px solid var(--wrong); }
+.note { color: var(--muted); font-size: 13px; max-width: 70ch; margin: 0; }
+</style>
+
+<main>
+  <header>
+    <h1>Apprentice replay</h1>
+    <p class="lede" id="lede">One life of the curious apprentice. Half the walls move, then all the food moves. Watch what it believes catch up with what is there.</p>
+  </header>
+
+  <section class="readouts" aria-label="Current step">
+    <div class="readout"><span>Energy now (of 100)</span><b id="r-energy">0</b></div>
+    <div class="readout"><span>Surprise, last 100 steps</span><b id="r-surprise">0</b></div>
+    <div class="readout"><span>Squares believed right</span><b id="r-right">0</b></div>
+    <div class="readout"><span>Meals / sleeps so far</span><b id="r-meals">0</b></div>
+  </section>
+
+  <section class="maps">
+    <figure>
+      <h2>The world</h2>
+      <canvas class="map" id="real" aria-label="Real grid"></canvas>
+    </figure>
+    <figure>
+      <h2>What it believes</h2>
+      <canvas class="map" id="belief" aria-label="Believed grid"></canvas>
+    </figure>
+  </section>
+
+  <ul class="legend">
+    <li><i class="sw" style="background:var(--floor)"></i>open floor</li>
+    <li><i class="sw" style="background:var(--wall)"></i>wall</li>
+    <li><i class="sw" style="background:var(--food)"></i>food</li>
+    <li><i class="sw" style="background:var(--hazard)"></i>hazard</li>
+    <li><i class="sw" style="background:var(--unknown)"></i>never seen</li>
+    <li><i class="sw ring"></i>believed wrong</li>
+    <li><i class="sw" style="background:var(--accent);border-radius:50%"></i>apprentice</li>
+  </ul>
+
+  <section class="controls" aria-label="Playback">
+    <button class="primary" id="play" type="button">Play</button>
+    <select id="speed" aria-label="Speed">
+      <option value="10">10 steps/s</option>
+      <option value="50" selected>50 steps/s</option>
+      <option value="250">250 steps/s</option>
+    </select>
+    <span id="clock">0</span>
+    <input id="scrub" type="range" min="0" value="0" aria-label="Step">
+    <span id="jumps"></span>
+  </section>
+
+  <figure>
+    <canvas class="chart" id="chart" aria-label="Surprise, energy and map over time"></canvas>
+    <ul class="legend">
+      <li><i class="sw line" style="background:var(--accent)"></i>surprise, mean of last 100 steps</li>
+      <li><i class="sw line" style="background:var(--hazard)"></i>energy, mean of last 100 steps</li>
+      <li><i class="sw line" style="background:var(--food)"></i>share of squares believed right</li>
+    </ul>
+  </figure>
+
+  <p class="note">Surprise is scaled so its highest point fills the chart. Squares believed right compares every square exactly, food included, so it dips each time a meal empties a square and the apprentice has not seen it grow back. Click the chart to jump to a step.</p>
+</main>
+
+<script>
+const LIFE = /*LIFE*/null;
+const $ = (id) => document.getElementById(id);
+const N = LIFE.energy.length, W = LIFE.width, H = LIFE.height;
+
+/** Index of the frame holding at step t (frames are sorted by t). */
+function frameAt(frames, t) {
+  let lo = 0, hi = frames.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (frames[mid].t <= t) lo = mid; else hi = mid - 1;
+  }
+  return frames[lo].map;
+}
+
+const right = new Float32Array(N), trail = new Float32Array(N), fuel = new Float32Array(N);
+const meals = new Uint32Array(N), sleeps = new Uint32Array(N);
+(function precompute() {
+  let sum = 0, esum = 0, m = 0, s = 0;
+  for (let t = 0; t < N; t++) {
+    const real = frameAt(LIFE.real, t), bel = frameAt(LIFE.believed, t);
+    let ok = 0;
+    for (let i = 0; i < real.length; i++) if (real[i] === bel[i]) ok++;
+    right[t] = ok / real.length;
+    sum += LIFE.surprise[t];
+    if (t >= 100) sum -= LIFE.surprise[t - 100];
+    trail[t] = sum / Math.min(t + 1, 100) / 10000;
+    esum += LIFE.energy[t];
+    if (t >= 100) esum -= LIFE.energy[t - 100];
+    fuel[t] = esum / Math.min(t + 1, 100);
+    const e = LIFE.events[t];
+    if (e === "e") m++;
+    if (e === "s") s++;
+    meals[t] = m; sleeps[t] = s;
+  }
+})();
+const peak = Math.max(...trail) || 1;
+
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const COLORS = { ".": "--floor", "#": "--wall", "*": "--food", "^": "--hazard", "?": "--unknown" };
+
+function fit(canvas) {
+  const r = canvas.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+  canvas.width = Math.round(r.width * d); canvas.height = Math.round(r.height * d);
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  return { ctx, w: r.width, h: r.height };
+}
+
+function drawMap(canvas, map, truth, t) {
+  const { ctx, w } = fit(canvas);
+  const pad = 8, cell = (w - 2 * pad) / W, gap = Math.max(1, cell * 0.06);
+  ctx.clearRect(0, 0, w, w);
+  for (let i = 0; i < map.length; i++) {
+    const x = pad + (i % W) * cell, y = pad + Math.floor(i / W) * cell;
+    ctx.fillStyle = css(COLORS[map[i]]);
+    ctx.fillRect(x + gap / 2, y + gap / 2, cell - gap, cell - gap);
+    if (truth && map[i] !== "?" && map[i] !== truth[i]) {
+      ctx.strokeStyle = css("--wrong"); ctx.lineWidth = Math.max(2, cell * 0.1);
+      const inset = gap / 2 + ctx.lineWidth / 2;
+      ctx.strokeRect(x + inset, y + inset, cell - 2 * inset, cell - 2 * inset);
+    }
+  }
+  const px = LIFE.pos[2 * t], py = LIFE.pos[2 * t + 1];
+  ctx.beginPath();
+  ctx.arc(pad + (px + 0.5) * cell, pad + (py + 0.5) * cell, cell * 0.3, 0, 2 * Math.PI);
+  ctx.fillStyle = css("--accent"); ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = css("--panel"); ctx.stroke();
+}
+
+const PAD = { l: 44, r: 16, t: 22, b: 28 };
+function drawChart(t) {
+  const canvas = $("chart"), { ctx, w, h } = fit(canvas);
+  const iw = w - PAD.l - PAD.r, ih = h - PAD.t - PAD.b;
+  const X = (s) => PAD.l + (s / (N - 1)) * iw, Y = (v) => PAD.t + (1 - v) * ih;
+  ctx.clearRect(0, 0, w, h);
+  ctx.font = `11px ${css("--mono")}`; ctx.fillStyle = css("--muted"); ctx.strokeStyle = css("--rule"); ctx.lineWidth = 1;
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (const v of [0, 0.5, 1]) {
+    ctx.beginPath(); ctx.moveTo(PAD.l, Y(v)); ctx.lineTo(w - PAD.r, Y(v)); ctx.stroke();
+    ctx.fillText(`${v * 100}%`, PAD.l - 6, Y(v));
+  }
+  ctx.textAlign = "center"; ctx.textBaseline = "top";
+  const tick = N > 3000 ? 1000 : 500;
+  for (let s = 0; s < N; s += tick) ctx.fillText(s.toLocaleString(), X(s), h - PAD.b + 8);
+  ctx.textBaseline = "bottom";
+  for (const m of LIFE.marks) {
+    ctx.strokeStyle = css("--muted"); ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(X(m.t), PAD.t); ctx.lineTo(X(m.t), h - PAD.b); ctx.stroke();
+    ctx.setLineDash([]); ctx.fillStyle = css("--muted"); ctx.fillText(m.label, X(m.t), PAD.t - 4);
+  }
+  const series = [
+    [right, 1, "--food"],
+    [fuel, 100, "--hazard"],
+    [trail, peak, "--accent"],
+  ];
+  const step = Math.max(1, Math.floor(N / iw));
+  for (const [ys, scale, color] of series) {
+    ctx.strokeStyle = css(color); ctx.lineWidth = 1.5; ctx.beginPath();
+    for (let s = 0; s < N; s += step) {
+      const v = Math.min(1, ys[s] / scale);
+      s === 0 ? ctx.moveTo(X(s), Y(v)) : ctx.lineTo(X(s), Y(v));
+    }
+    ctx.stroke();
+  }
+  ctx.strokeStyle = css("--ink"); ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(X(t), PAD.t); ctx.lineTo(X(t), h - PAD.b); ctx.stroke();
+}
+
+let t = 0, playing = false, last = 0, carry = 0;
+function render() {
+  const real = frameAt(LIFE.real, t), bel = frameAt(LIFE.believed, t);
+  drawMap($("real"), real, null, t);
+  drawMap($("belief"), bel, real, t);
+  drawChart(t);
+  $("r-energy").textContent = LIFE.energy[t];
+  $("r-surprise").textContent = trail[t].toFixed(4);
+  $("r-right").textContent = `${Math.round(right[t] * real.length)} / ${real.length}`;
+  $("r-meals").textContent = `${meals[t]} / ${sleeps[t]}`;
+  $("clock").textContent = `${(t + 1).toLocaleString()} / ${N.toLocaleString()}`;
+  $("scrub").value = t;
+}
+
+function seek(s) { t = Math.max(0, Math.min(N - 1, s)); render(); }
+
+function tick(now) {
+  if (!playing) return;
+  carry += ((now - last) / 1000) * Number($("speed").value);
+  last = now;
+  const n = Math.floor(carry);
+  if (n > 0) {
+    carry -= n;
+    if (t + n >= N - 1) { seek(N - 1); setPlaying(false); return; }
+    seek(t + n);
+  }
+  requestAnimationFrame(tick);
+}
+
+function setPlaying(on) {
+  playing = on;
+  $("play").textContent = on ? "Pause" : "Play";
+  if (on) { if (t >= N - 1) t = 0; last = performance.now(); carry = 0; requestAnimationFrame(tick); }
+}
+
+$("scrub").max = N - 1;
+$("scrub").addEventListener("input", (e) => seek(Number(e.target.value)));
+$("play").addEventListener("click", () => setPlaying(!playing));
+$("chart").addEventListener("click", (e) => {
+  const r = e.currentTarget.getBoundingClientRect();
+  const iw = r.width - PAD.l - PAD.r;
+  seek(Math.round(((e.clientX - r.left - PAD.l) / iw) * (N - 1)));
+});
+for (const m of LIFE.marks) {
+  const b = document.createElement("button");
+  b.type = "button"; b.textContent = `Just before ${m.label}`;
+  b.addEventListener("click", () => seek(m.t - 20));
+  $("jumps").append(b, " ");
+}
+$("lede").textContent += ` World seed ${LIFE.seed}, ${N.toLocaleString()} steps; ${LIFE.marks.map((m) => `${m.label} at step ${m.t.toLocaleString()}`).join(", ")}.`;
+window.addEventListener("resize", render);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+seek(LIFE.marks[0].t - 20);
+</script>

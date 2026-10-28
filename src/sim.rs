@@ -38,11 +38,24 @@ impl Default for Physiology {
     }
 }
 
+/// Where food grows back after it is eaten.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Regrowth {
+    /// At once, on a random empty square (phases 0-2).
+    #[default]
+    Anywhere,
+    /// On the same square, `delay` steps later, like a bush: food has places
+    /// worth remembering.
+    InPlace { delay: u64 },
+}
+
 /// Full world configuration.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Config {
     pub layout: Layout,
     pub physiology: Physiology,
+    #[serde(default)]
+    pub regrowth: Regrowth,
 }
 
 /// What an action did.
@@ -94,6 +107,9 @@ pub struct Sim {
     energy: u32,
     t: u64,
     rng: Rng,
+    /// Eaten food squares waiting to grow back, with the step they are due.
+    #[serde(default)]
+    regrowing: Vec<(Pos, u64)>,
 }
 
 impl Sim {
@@ -118,6 +134,7 @@ impl Sim {
             energy,
             t: 0,
             rng,
+            regrowing: Vec::new(),
         })
     }
 
@@ -167,6 +184,7 @@ impl Sim {
             self.pos = self.start;
             self.energy = phys.start_energy;
         }
+        self.regrow();
         Outcome {
             event,
             energy: self.energy,
@@ -198,14 +216,56 @@ impl Sim {
         moved
     }
 
+    /// Moves every food square (grown or regrowing) to a random empty square
+    /// that held none before, never under the agent. Returns how many moved.
+    pub fn move_food(&mut self) -> usize {
+        let mut old = self.grid.positions_of(Cell::Food);
+        for &p in &old {
+            self.grid.set(p, Cell::Empty);
+        }
+        old.extend(self.regrowing.drain(..).map(|(p, _)| p));
+        let mut moved = 0;
+        for _ in &old {
+            let room: Vec<Pos> = self
+                .grid
+                .positions_of(Cell::Empty)
+                .into_iter()
+                .filter(|p| *p != self.pos && !old.contains(p))
+                .collect();
+            let Some(to) = self.rng.pick(&room) else {
+                break;
+            };
+            self.grid.set(to, Cell::Food);
+            moved += 1;
+        }
+        moved
+    }
+
     /// Returns `(event, extra cost, gain)`.
     fn eat(&mut self) -> (Event, u32, u32) {
         if self.grid.get(self.pos) != Cell::Food {
             return (Event::AteNothing, 0, 0);
         }
         self.grid.set(self.pos, Cell::Empty);
-        self.grid.place_randomly(Cell::Food, &mut self.rng);
+        match self.config.regrowth {
+            Regrowth::Anywhere => {
+                self.grid.place_randomly(Cell::Food, &mut self.rng);
+            }
+            Regrowth::InPlace { delay } => self.regrowing.push((self.pos, self.t + 1 + delay)),
+        }
         (Event::Ate, 0, self.config.physiology.food_value)
+    }
+
+    /// Grows back due food on empty squares the agent is not standing on.
+    fn regrow(&mut self) {
+        let (t, pos, grid) = (self.t, self.pos, &mut self.grid);
+        self.regrowing.retain(|&(p, due)| {
+            let ready = due <= t && p != pos && grid.get(p) == Cell::Empty;
+            if ready {
+                grid.set(p, Cell::Food);
+            }
+            !ready
+        });
     }
 
     /// Returns `(event, extra cost, gain)`.
@@ -263,6 +323,37 @@ mod tests {
     }
 
     #[test]
+    fn food_regrows_in_place_after_the_delay_once_the_agent_leaves() {
+        let mut sim = corridor(Cell::Food, Cell::Empty);
+        sim.config.regrowth = Regrowth::InPlace { delay: 2 };
+        sim.step(Action::Move(Dir::East));
+        sim.step(Action::Eat);
+        assert!(sim.grid().positions_of(Cell::Food).is_empty());
+        sim.step(Action::Rest);
+        sim.step(Action::Rest); // due, but the agent stands on it
+        assert_eq!(sim.grid().get(Pos { x: 1, y: 0 }), Cell::Empty);
+        sim.step(Action::Move(Dir::East));
+        assert_eq!(sim.grid().get(Pos { x: 1, y: 0 }), Cell::Food);
+    }
+
+    #[test]
+    fn moving_food_takes_regrowing_bushes_along() {
+        let mut sim = Sim::new(Config::default(), 3).expect("room");
+        sim.config.regrowth = Regrowth::InPlace { delay: 50 };
+        let food = sim.grid().positions_of(Cell::Food);
+        sim.pos = food[0];
+        sim.step(Action::Eat);
+        assert_eq!(sim.move_food(), food.len());
+        let after = sim.grid().positions_of(Cell::Food);
+        assert_eq!(after.len(), food.len());
+        assert!(after.iter().all(|p| !food.contains(p)));
+        for _ in 0..60 {
+            sim.step(Action::Rest);
+        }
+        assert_eq!(sim.grid().positions_of(Cell::Food).len(), food.len());
+    }
+
+    #[test]
     fn eating_gains_energy_and_food_regrows_elsewhere() {
         let mut sim = corridor(Cell::Food, Cell::Empty);
         sim.step(Action::Move(Dir::East));
@@ -313,6 +404,16 @@ mod tests {
     fn moving_walls_on_a_wall_free_grid_moves_none() {
         let mut sim = corridor(Cell::Empty, Cell::Empty);
         assert_eq!(sim.move_walls(3), 0);
+    }
+
+    #[test]
+    fn moving_food_keeps_the_count_and_uses_new_squares() {
+        let mut sim = Sim::new(Config::default(), 4).expect("room");
+        let before = sim.grid().positions_of(Cell::Food);
+        assert_eq!(sim.move_food(), before.len());
+        let after = sim.grid().positions_of(Cell::Food);
+        assert_eq!(after.len(), before.len());
+        assert!(after.iter().all(|p| !before.contains(p) && *p != sim.pos()));
     }
 
     #[test]

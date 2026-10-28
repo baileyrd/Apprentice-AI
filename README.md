@@ -7,22 +7,24 @@ square with everything it has learned intact.
 
 Design sketch: <https://claude.ai/artifact/NGoii1LqBsYDEWPomT7mSQ>
 
-## Status: phase 2
+## Status: phase 3
 
-The world, the body, the yardstick, a world model that learns, and an
-apprentice that chooses its own actions from drive and curiosity.
-Results: [phase 1](docs/p1/README.md), [phase 2](docs/p2/README.md).
+The world, the body, the yardstick, a world model that learns, an
+apprentice that chooses its own actions from drive and curiosity, and a
+replay dashboard that puts what it believes next to what is there.
+Results: [phase 1](docs/p1/README.md), [phase 2](docs/p2/README.md),
+[phase 3](docs/p3/README.md).
 
 | Module      | What it holds                                                   |
 |-------------|-----------------------------------------------------------------|
 | `world`     | Grid of `Empty`/`Wall`/`Food`/`Hazard`; out of bounds is a wall  |
 | `body`      | 3×3 view, energy, path-integrated offset; `Move`, `Eat`, `Rest`  |
-| `sim`       | Energy rules, food regrowth, sleep-and-respawn; pure            |
+| `sim`       | Energy rules, food regrowth (anywhere or in place), sleep; pure |
 | `agent`     | `Agent` port and two baselines: `random` and `reflex`           |
 | `metrics`   | Meals, sleeps, bumps, hurts, mean energy, mean time to food     |
 | `model`     | World models: two-layer predictive coding; backprop baseline    |
 | `apprentice`| The learner: learned valence and volatility, drive + curiosity  |
-| `adaptation`| Phase 2 experiment: move half the walls, time the recovery      |
+| `adaptation`| Move half the walls or all the food, time the recovery          |
 | `experiment`| Surprise-per-episode run and the pre-registered fallback rule   |
 | `report`    | CSV and SVG rendering of results                                |
 | `rng`       | SplitMix64, so checkpoints replay bit-for-bit                   |
@@ -45,16 +47,25 @@ Runs the phase 1 surprise experiment and writes `surprise.csv` and
 `surprise.svg`.
 
 ```sh
-cargo run --release --bin adapt -- --out docs/p2
+cargo run --release --bin adapt -- --change walls --out docs/p2
+cargo run --release --bin adapt -- --change food --out docs/p3
 ```
 
-Runs the phase 2 adaptation experiment across 10 seeds and three minds.
+Runs the adaptation experiments (walls move, or food moves) across 10 seeds
+and three minds.
+
+```sh
+cargo run --release --bin dashboard -- --out docs/p3/dashboard.html
+```
+
+Writes a self-contained page replaying one life: real map against believed
+map, surprise and energy, as the walls and then the food move.
 
 ## Roadmap
 
 1. **P0** world, body, baselines, step log, checkpoints (done)
 2. **P1** predictive-coding world model; surprise curve (done)
-3. **P2** action from homeostatic drive + curiosity (this)
-4. **P3** dashboard (believed vs real map) and adaptation tests
+3. **P2** action from homeostatic drive + curiosity (done)
+4. **P3** dashboard (believed vs real map) and food-move adaptation (this)
 5. **P4** episodic diary, sleep replay, consolidation and decay
 6. Later: mentor, language, multiple apprentices

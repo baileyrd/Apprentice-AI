@@ -1,10 +1,10 @@
-//! Phase 2 experiment: adaptation after the walls move, across seeds and minds.
+//! Adaptation experiment (phases 2 and 3): after walls or food move, across seeds and minds.
 
 use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use apprentice::adaptation::{self, Recovery, Setup, Trace};
+use apprentice::adaptation::{self, Change, Recovery, Setup, Trace};
 use apprentice::agent::ReflexAgent;
 use apprentice::apprentice::{Apprentice, Drives, Watched};
 use apprentice::model::Rates;
@@ -12,12 +12,13 @@ use apprentice::report::{self, Line};
 use apprentice::sim::SimError;
 
 const USAGE: &str = "\
-usage: adapt [--seeds N] [--out DIR]
+usage: adapt [--change walls|food] [--seeds N] [--out DIR]
 
 Lives seeds 1..=N (default 10) with three minds: reflex (with a world model
-watching), drive-only apprentice and drive + curiosity apprentice. Half the
-walls move after the warm-up. Prints adaptation times and writes
-DIR/adaptation.csv and DIR/adaptation.svg (default DIR: runs/p2).";
+watching), drive-only apprentice and drive + curiosity apprentice. After the
+warm-up, half the walls move (default) or all the food moves. Prints
+adaptation times and writes DIR/adaptation.csv and DIR/adaptation.svg
+(default DIR: runs/<change>).";
 
 type Error = Box<dyn std::error::Error>;
 
@@ -41,17 +42,36 @@ fn live(mind: &str, setup: &Setup) -> Result<Trace, SimError> {
     }
 }
 
-fn parse(mut raw: impl Iterator<Item = String>) -> Result<(u64, PathBuf), Error> {
-    let (mut seeds, mut out) = (10, PathBuf::from("runs/p2"));
+struct Args {
+    change: Change,
+    seeds: u64,
+    out: PathBuf,
+}
+
+fn parse(mut raw: impl Iterator<Item = String>) -> Result<Args, Error> {
+    let (mut change, mut seeds, mut out) = (Change::Walls, 10, None);
     while let Some(flag) = raw.next() {
         let mut value = || raw.next().ok_or_else(|| format!("{flag} needs a value"));
         match flag.as_str() {
+            "--change" => {
+                change = match value()?.as_str() {
+                    "walls" => Change::Walls,
+                    "food" => Change::Food,
+                    other => return Err(format!("unknown change: {other}").into()),
+                }
+            }
             "--seeds" => seeds = value()?.parse()?,
-            "--out" => out = value()?.into(),
+            "--out" => out = Some(value()?.into()),
             other => return Err(format!("unknown argument: {other}").into()),
         }
     }
-    Ok((seeds, out))
+    let name = if change == Change::Walls {
+        "walls"
+    } else {
+        "food"
+    };
+    let out = out.unwrap_or_else(|| PathBuf::from("runs").join(name));
+    Ok(Args { change, seeds, out })
 }
 
 fn fmt_steps(steps: Option<usize>) -> String {
@@ -71,8 +91,9 @@ fn median(mut xs: Vec<f64>) -> f64 {
     }
 }
 
-fn execute(seeds: u64, out: &PathBuf) -> Result<(), Error> {
-    let base = Setup::default();
+fn execute(args: &Args) -> Result<(), Error> {
+    let (seeds, out) = (args.seeds, &args.out);
+    let base = Setup::for_change(args.change);
     let horizon = base.after as f64;
     println!("seed  {:>20}  {:>20}  {:>20}", MINDS[0], MINDS[1], MINDS[2]);
     let mut all: Vec<Vec<(Trace, Recovery)>> = vec![Vec::new(); MINDS.len()];
@@ -110,8 +131,13 @@ fn execute(seeds: u64, out: &PathBuf) -> Result<(), Error> {
         let meals = median(runs.iter().map(|(t, _)| t.summary.meals as f64).collect());
         let sleeps = median(runs.iter().map(|(t, _)| t.summary.sleeps as f64).collect());
         let energy = median(runs.iter().map(|(t, _)| t.summary.mean_energy).collect());
+        let meal = median(
+            runs.iter()
+                .map(|(t, _)| t.first_meal.map_or(horizon, |s| s as f64))
+                .collect(),
+        );
         println!(
-            "{name:>18}: median adaptation {:.0} steps, recovered {recovered}/{}, map before move {:.1}%, meals {meals:.0}, sleeps {sleeps:.0}, mean energy {energy:.1}",
+            "{name:>18}: median adaptation {:.0} steps, recovered {recovered}/{}, map target {:.1}%, first meal after {meal:.0}, meals {meals:.0}, sleeps {sleeps:.0}, mean energy {energy:.1}",
             median(both),
             runs.len(),
             100.0 * pre,
@@ -120,14 +146,26 @@ fn execute(seeds: u64, out: &PathBuf) -> Result<(), Error> {
     fs::create_dir_all(out)?;
     fs::write(out.join("adaptation.csv"), csv(&all))?;
     let surprise = curves(&all, |t| trailing(&t.surprise, base.trail));
-    let accuracy = curves(&all, |t| t.accuracy.clone());
+    let map = curves(&all, |t| t.map.clone());
+    let figure = match args.change {
+        Change::Walls => report::Figure {
+            title: "Adapting after half the walls move",
+            map_title: "Share of the believed map that is right (walls, hazards, open floor)",
+            map_range: (0.8, 1.0),
+        },
+        Change::Food => report::Figure {
+            title: "Adapting after all the food moves",
+            map_title: "Share of old food beliefs checked and cleared",
+            map_range: (0.0, 1.0),
+        },
+    };
     let times: Vec<(&str, Vec<Option<usize>>)> = MINDS
         .iter()
         .zip(&all)
         .map(|(name, runs)| (*name, runs.iter().map(|(_, r)| r.both).collect()))
         .collect();
     let range = (WINDOW.0 as f64, WINDOW.1 as f64);
-    let svg = report::adaptation_svg(&surprise, &accuracy, &times, range, base.after);
+    let svg = report::adaptation_svg(&figure, &surprise, &map, &times, range, base.after);
     fs::write(out.join("adaptation.svg"), svg)?;
     Ok(())
 }
@@ -155,8 +193,10 @@ fn curves(
         .iter()
         .zip(all)
         .map(|(name, runs)| {
-            let series: Vec<(usize, Vec<f64>)> =
-                runs.iter().map(|(t, _)| (t.change, measure(t))).collect();
+            let series: Vec<(usize, Vec<f64>)> = runs
+                .iter()
+                .map(|(t, _)| (t.changed_at, measure(t)))
+                .collect();
             let points = (WINDOW.0..=WINDOW.1)
                 .step_by(STRIDE)
                 .filter_map(|rel| {
@@ -174,18 +214,20 @@ fn curves(
 
 fn csv(all: &[Vec<(Trace, Recovery)>]) -> String {
     let mut out = String::from(
-        "mind,seed,adapt_steps,surprise_steps,map_steps,map_before_move,meals,sleeps,mean_energy\n",
+        "mind,seed,adapt_steps,surprise_steps,map_steps,map_target,stale_food,first_meal,meals,sleeps,mean_energy\n",
     );
     let cell = |v: Option<usize>| v.map_or(String::new(), |s| s.to_string());
     for (name, runs) in MINDS.iter().zip(all) {
         for (i, (t, r)) in runs.iter().enumerate() {
             out.push_str(&format!(
-                "{name},{},{},{},{},{:.4},{},{},{:.2}\n",
+                "{name},{},{},{},{},{:.4},{},{},{},{},{:.2}\n",
                 i + 1,
                 cell(r.both),
                 cell(r.surprise),
                 cell(r.map),
                 r.baseline_accuracy,
+                t.stale,
+                cell(t.first_meal),
                 t.summary.meals,
                 t.summary.sleeps,
                 t.summary.mean_energy,
@@ -201,7 +243,7 @@ fn main() -> ExitCode {
         println!("{USAGE}");
         return ExitCode::SUCCESS;
     }
-    match parse(raw.into_iter()).and_then(|(seeds, out)| execute(seeds, &out)) {
+    match parse(raw.into_iter()).and_then(|args| execute(&args)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("error: {err}\n\n{USAGE}");
