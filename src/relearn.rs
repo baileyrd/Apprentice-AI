@@ -34,6 +34,8 @@ pub struct Trace {
     pub surprise: Vec<f64>,
     /// Structural accuracy against the world it is in, after each step.
     pub map: Vec<f64>,
+    /// Which of its own maps it used at each step, if it keeps several.
+    pub maps: Vec<Option<usize>>,
     pub phase: usize,
     pub summary: Summary,
 }
@@ -64,6 +66,7 @@ pub fn run(setup: &Setup, mind: &mut impl Mind) -> Result<Trace, SimError> {
     let total = 3 * setup.phase;
     let mut surprise = Vec::with_capacity(total);
     let mut map = Vec::with_capacity(total);
+    let mut maps = Vec::with_capacity(total);
     for t in 0..total {
         let sim = if (setup.phase..2 * setup.phase).contains(&t) {
             &mut b
@@ -76,13 +79,27 @@ pub fn run(setup: &Setup, mind: &mut impl Mind) -> Result<Trace, SimError> {
         metrics.record(&outcome);
         surprise.push(mind.surprise());
         map.push(accuracy(sim, mind));
+        maps.push(mind.map_in_use());
     }
     Ok(Trace {
         surprise,
         map,
+        maps,
         phase: setup.phase,
         summary: metrics.summary(),
     })
+}
+
+/// Steps in world B spent on the map in use when A ended: the A/B mix-up.
+pub fn mixed_up(trace: &Trace) -> usize {
+    let p = trace.phase;
+    let Some(a) = trace.maps[p - 1] else {
+        return 0;
+    };
+    trace.maps[p..2 * p]
+        .iter()
+        .filter(|&&m| m == Some(a))
+        .count()
 }
 
 /// Applies the learning rule to a trace.
@@ -114,6 +131,7 @@ mod tests {
     fn trace(map: Vec<f64>, phase: usize) -> Trace {
         Trace {
             surprise: vec![0.0; map.len()],
+            maps: vec![None; map.len()],
             map,
             phase,
             summary: Metrics::default().summary(),
@@ -133,6 +151,15 @@ mod tests {
         assert_eq!((l.first_a, l.b, l.second_a), (Some(3), Some(4), Some(1)));
         assert_eq!(l.on_return, 0.95);
         assert_eq!(l.savings(), Some(1.0 / 3.0));
+    }
+
+    #[test]
+    fn mix_up_counts_b_steps_on_the_map_a_ended_with() {
+        let mut t = trace(vec![0.0; 9], 3);
+        t.maps = [0, 1, 1, 1, 2, 1, 1, 1, 1].map(Some).to_vec();
+        assert_eq!(mixed_up(&t), 2);
+        t.maps = vec![None; 9];
+        assert_eq!(mixed_up(&t), 0);
     }
 
     #[test]

@@ -41,6 +41,10 @@ pub trait Mind {
     fn surprise(&self) -> f64;
     /// Most likely kind at `at` (relative to the wake square); `None` if unseen.
     fn believes(&self, at: Pos) -> Option<Cell>;
+    /// Which of its own maps it is using; `None` if it keeps only one.
+    fn map_in_use(&self) -> Option<usize> {
+        None
+    }
 }
 
 /// A fixed policy with a world model watching: the comparison for phase 2.
@@ -400,6 +404,10 @@ impl<M: WorldModel> Mind for Apprentice<M> {
 
     fn believes(&self, at: Pos) -> Option<Cell> {
         self.model.believes(at)
+    }
+
+    fn map_in_use(&self) -> Option<usize> {
+        self.model.map_in_use()
     }
 }
 
