@@ -13,7 +13,16 @@
 //!
 //! Patterns learn only in sleep, from the day's sightings replayed from the
 //! diary, by a delta rule. Every world feeds the same table.
+//!
+//! **Words.** A mentor's word said about a square joins that square's state
+//! until it next looks different, and the sighting also teaches a pattern
+//! keyed on the word. So a word comes to mean what squares it was said about
+//! went on to become: "this one grows back", if that is what keeps happening.
+//! A word whose pattern is learned answers before the general one.
 
+use std::collections::HashMap;
+
+use crate::body::Word;
 use crate::model::{Belief, KINDS, kind, one_hot};
 use crate::world::Cell;
 
@@ -60,6 +69,18 @@ pub struct Patterns {
     /// Samples a pattern needs before it predicts.
     min: u32,
     table: [[(Belief, u32); AGES]; STATES],
+    /// The same, for squares a word was said about.
+    worded: HashMap<(Word, usize, usize), (Belief, u32)>,
+}
+
+/// Moves `slot` toward `sensed` at `rate` and counts the sample.
+fn nudge(slot: &mut (Belief, u32), rate: f64, sensed: Cell) {
+    let (belief, count) = slot;
+    let target = one_hot(sensed);
+    for k in 0..KINDS {
+        belief[k] += rate * (target[k] - belief[k]);
+    }
+    *count = count.saturating_add(1);
 }
 
 impl Patterns {
@@ -69,23 +90,39 @@ impl Patterns {
             rate,
             min,
             table: [[(UNIFORM, 0); AGES]; STATES],
+            worded: HashMap::new(),
         }
     }
 
-    /// A square in state `last`, `age` steps old, was seen as `sensed`.
-    pub fn learn(&mut self, last: Last, age: u64, sensed: Cell) {
-        let (belief, count) = &mut self.table[last.index()][age_group(age)];
-        let target = one_hot(sensed);
-        for k in 0..KINDS {
-            belief[k] += self.rate * (target[k] - belief[k]);
+    /// A square in state `last`, `age` steps old, and told `word` if any, was
+    /// seen as `sensed`.
+    pub fn learn(&mut self, last: Last, age: u64, word: Option<Word>, sensed: Cell) {
+        let (state, group) = (last.index(), age_group(age));
+        nudge(&mut self.table[state][group], self.rate, sensed);
+        if let Some(word) = word {
+            let slot = self
+                .worded
+                .entry((word, state, group))
+                .or_insert((UNIFORM, 0));
+            nudge(slot, self.rate, sensed);
         }
-        *count = count.saturating_add(1);
     }
 
-    /// What a square in state `last`, `age` steps old, is now; `None` until
-    /// the pattern has enough samples.
-    pub fn predict(&self, last: Last, age: u64) -> Option<Belief> {
+    /// What a square in state `last`, `age` steps old, and told `word` if
+    /// any, is now: the word's pattern if learned, else the general one;
+    /// `None` until a pattern has enough samples.
+    pub fn predict(&self, last: Last, age: u64, word: Option<Word>) -> Option<Belief> {
+        if let Some(told) = word.and_then(|w| self.foretold(last, age, w)) {
+            return Some(told);
+        }
         let (belief, count) = self.table[last.index()][age_group(age)];
+        (count >= self.min).then_some(belief)
+    }
+
+    /// What `word`'s pattern alone says of a square in state `last`, `age`
+    /// steps old; `None` until it has enough samples.
+    pub fn foretold(&self, last: Last, age: u64, word: Word) -> Option<Belief> {
+        let (belief, count) = *self.worded.get(&(word, last.index(), age_group(age)))?;
         (count >= self.min).then_some(belief)
     }
 }
@@ -106,11 +143,11 @@ mod tests {
     #[test]
     fn a_pattern_is_silent_until_it_has_enough_samples() {
         let mut p = Patterns::new(0.1, 3);
-        p.learn(Last::Ate, 40, Cell::Food);
-        p.learn(Last::Ate, 40, Cell::Food);
-        assert_eq!(p.predict(Last::Ate, 40), None);
-        p.learn(Last::Ate, 50, Cell::Food); // same age group
-        assert!(p.predict(Last::Ate, 40).is_some());
+        p.learn(Last::Ate, 40, None, Cell::Food);
+        p.learn(Last::Ate, 40, None, Cell::Food);
+        assert_eq!(p.predict(Last::Ate, 40, None), None);
+        p.learn(Last::Ate, 50, None, Cell::Food); // same age group
+        assert!(p.predict(Last::Ate, 40, None).is_some());
     }
 
     #[test]
@@ -118,15 +155,43 @@ mod tests {
         let mut p = Patterns::new(0.1, 5);
         for _ in 0..50 {
             for age in 1..30 {
-                p.learn(Last::Ate, age, Cell::Empty);
+                p.learn(Last::Ate, age, None, Cell::Empty);
             }
             for age in 32..64 {
-                p.learn(Last::Ate, age, Cell::Food);
+                p.learn(Last::Ate, age, None, Cell::Food);
             }
         }
-        let food = |age| p.predict(Last::Ate, age).expect("learned")[kind(Cell::Food)];
+        let food = |age| p.predict(Last::Ate, age, None).expect("learned")[kind(Cell::Food)];
         assert!(food(5) < 0.1, "{}", food(5));
         assert!(food(40) > 0.9, "{}", food(40));
-        assert_eq!(p.predict(Last::Saw(Cell::Empty), 40), None);
+        assert_eq!(p.predict(Last::Saw(Cell::Empty), 40, None), None);
+    }
+
+    #[test]
+    fn a_word_means_what_its_squares_became() {
+        let (back, gone) = (Word(4), Word(5));
+        let mut p = Patterns::new(0.1, 5);
+        for _ in 0..50 {
+            p.learn(Last::Ate, 40, Some(back), Cell::Food);
+            p.learn(Last::Ate, 40, Some(gone), Cell::Empty);
+        }
+        let food = |w| p.predict(Last::Ate, 40, w).expect("learned")[kind(Cell::Food)];
+        assert!(food(Some(back)) > 0.9, "{}", food(Some(back)));
+        assert!(food(Some(gone)) < 0.1, "{}", food(Some(gone)));
+        let general = food(None);
+        assert!((0.3..0.7).contains(&general), "{general}");
+    }
+
+    #[test]
+    fn an_unlearned_word_falls_back_to_the_general_pattern() {
+        let mut p = Patterns::new(0.1, 5);
+        for _ in 0..10 {
+            p.learn(Last::Ate, 40, None, Cell::Food);
+        }
+        p.learn(Last::Ate, 40, Some(Word(9)), Cell::Empty);
+        assert_eq!(
+            p.predict(Last::Ate, 40, Some(Word(9))),
+            p.predict(Last::Ate, 40, None)
+        );
     }
 }

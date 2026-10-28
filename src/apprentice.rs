@@ -198,6 +198,7 @@ impl<M: WorldModel> Apprentice<M> {
     /// square).
     pub fn hear(&mut self, at: Pos, word: Word) {
         self.told.insert(at, word);
+        self.model.hear(at, word);
     }
 
     /// What `word` has turned out to mean; `None` if never checked.
