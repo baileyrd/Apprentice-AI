@@ -13,18 +13,20 @@
 //! believed map. No gradients, no ML library: delta rules and a shortest-path
 //! search.
 //!
-//! A mentor may point at a square ([`Apprentice::hear`]). The pointing never
-//! enters the world model: it only adds the food it promises, weighed by how
-//! far the apprentice trusts the mentor, to that square while planning. When
-//! the square comes into view, the apprentice checks it and moves its trust
-//! toward what it saw, by a delta rule.
+//! A mentor may say a word about a square ([`Apprentice::hear`]). Words start
+//! with no meaning. When a square it was told about comes into view, the
+//! apprentice moves that word's meaning (a belief over kinds of square)
+//! toward what it sees, by a delta rule. Told words never enter the world
+//! model: while planning, a told square only gains the food its word means.
+//! So a mentor that names what the apprentice is looking at teaches it words,
+//! and a mentor whose words keep proving wrong is ignored.
 
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use crate::agent::Agent;
-use crate::body::{Action, Observation};
-use crate::model::{Belief, KINDS, PredictiveCoding, Rates, WorldModel, error, kind};
+use crate::body::{Action, Observation, Word};
+use crate::model::{Belief, KINDS, PredictiveCoding, Rates, WorldModel, error, kind, one_hot};
 use crate::rng::Rng;
 use crate::sim::Outcome;
 use crate::world::{Cell, Dir, Pos};
@@ -154,14 +156,14 @@ pub struct Apprentice<M = PredictiveCoding> {
     /// What it tried last, its energy before, and where it stood.
     pending: Option<(Tried, f64, Pos)>,
     surprise: f64,
-    /// The square a mentor last pointed at, not yet checked.
-    hint: Option<Pos>,
-    /// Learned chance that a square the mentor points at holds food.
-    trust: f64,
+    /// Squares a mentor said something about, not yet checked.
+    told: HashMap<Pos, Word>,
+    /// What each word has turned out to mean.
+    lexicon: HashMap<Word, Belief>,
 }
 
-/// Trust in a mentor before any of its hints has been checked.
-pub const TRUST_PRIOR: f64 = 0.5;
+/// Meaning of a word on its first check, before what was seen is learned.
+const UNIFORM: Belief = [1.0 / KINDS as f64; KINDS];
 
 impl Apprentice {
     /// An apprentice with the phase 1 world model and no memory.
@@ -183,35 +185,36 @@ impl<M: WorldModel> Apprentice<M> {
             t: 0,
             pending: None,
             surprise: 0.0,
-            hint: None,
-            trust: TRUST_PRIOR,
+            told: HashMap::new(),
+            lexicon: HashMap::new(),
         }
     }
 
-    /// A mentor points at `at` (relative to the wake square): "food there".
-    pub fn hear(&mut self, at: Pos) {
-        self.hint = Some(at);
+    /// A mentor says `word` about the square at `at` (relative to the wake
+    /// square).
+    pub fn hear(&mut self, at: Pos, word: Word) {
+        self.told.insert(at, word);
     }
 
-    /// Learned chance that the mentor's pointing is right.
-    pub fn trust(&self) -> f64 {
-        self.trust
+    /// What `word` has turned out to mean; `None` if never checked.
+    pub fn meaning(&self, word: Word) -> Option<Belief> {
+        self.lexicon.get(&word).copied()
     }
 
-    /// Checks the hinted square once it is in view, learning trust from it.
-    fn check_hint(&mut self, obs: &Observation) {
-        let Some(at) = self.hint else {
-            return;
-        };
-        let Some(i) = (0..obs.view.len()).find(|&i| {
+    /// Checks told squares now in view, learning what their words mean.
+    fn check_told(&mut self, obs: &Observation) {
+        let rate = self.drives.learning;
+        for (i, &sensed) in obs.view.iter().enumerate() {
             let (dx, dy) = Observation::view_delta(i);
-            obs.offset.shift(dx, dy) == at
-        }) else {
-            return;
-        };
-        let right = if obs.view[i] == Cell::Food { 1.0 } else { 0.0 };
-        self.trust += self.drives.learning * (right - self.trust);
-        self.hint = None;
+            let Some(word) = self.told.remove(&obs.offset.shift(dx, dy)) else {
+                continue;
+            };
+            let meaning = self.lexicon.entry(word).or_insert(UNIFORM);
+            let target = one_hot(sensed);
+            for k in 0..KINDS {
+                meaning[k] += rate * (target[k] - meaning[k]);
+            }
+        }
     }
 
     /// Its world model.
@@ -274,8 +277,8 @@ impl<M: WorldModel> Apprentice<M> {
     fn utility(&self, at: Pos, hunger: f64) -> f64 {
         let b = self.model.predict(at);
         let mut food = self.food(&b);
-        if self.hint == Some(at) {
-            food += self.trust * self.valence.eat[kind(Cell::Food)].max(0.0);
+        if let Some(meaning) = self.told.get(&at).and_then(|&w| self.meaning(w)) {
+            food += self.food(&meaning);
         }
         hunger * food / self.drives.scale + self.drives.curiosity * self.novelty(at)
     }
@@ -362,7 +365,7 @@ impl<M: WorldModel> Mind for Apprentice<M> {
         self.t += 1;
         self.learn_volatility(obs);
         self.surprise = self.model.observe(obs);
-        self.check_hint(obs);
+        self.check_told(obs);
         let (action, tried) = self.choose(obs);
         self.pending = Some((tried, f64::from(obs.energy), obs.offset));
         action
@@ -611,33 +614,46 @@ mod tests {
         );
     }
 
+    const FOOD_WORD: Word = Word(7);
+
     #[test]
-    fn a_checked_hint_moves_trust_toward_what_it_saw() {
+    fn a_word_means_what_was_seen_where_it_was_said() {
         let mut a = taught(0.0);
-        a.hear(Pos { x: 1, y: 0 });
+        assert_eq!(a.meaning(FOOD_WORD), None);
         let mut view = [Cell::Empty; VIEW * VIEW];
         view[5] = Cell::Food; // east
-        a.act(&obs(view, 20));
-        assert!(a.trust() > TRUST_PRIOR);
-        a.hear(Pos { x: 1, y: 0 });
-        a.act(&open(20));
-        assert!(a.trust() < TRUST_PRIOR + 0.1);
-        assert_eq!(a.hint, None);
+        for _ in 0..10 {
+            a.hear(Pos { x: 1, y: 0 }, FOOD_WORD);
+            a.act(&obs(view, 95));
+        }
+        let m = a.meaning(FOOD_WORD).expect("checked");
+        assert!(m[kind(Cell::Food)] > 0.85, "{m:?}");
+        assert!(a.told.is_empty());
     }
 
     #[test]
-    fn an_unseen_hint_waits_to_be_checked() {
+    fn a_word_said_out_of_view_waits_to_be_checked() {
         let mut a = taught(0.0);
-        a.hear(Pos { x: 5, y: 0 });
+        a.hear(Pos { x: 5, y: 0 }, FOOD_WORD);
         a.act(&open(20));
-        assert_eq!((a.hint, a.trust()), (Some(Pos { x: 5, y: 0 }), TRUST_PRIOR));
+        assert_eq!(a.meaning(FOOD_WORD), None);
+        assert_eq!(a.told.get(&Pos { x: 5, y: 0 }), Some(&FOOD_WORD));
     }
 
     #[test]
-    fn a_hungry_apprentice_follows_a_trusted_hint() {
+    fn a_hungry_apprentice_follows_a_word_it_knows() {
         let mut a = taught(0.0);
-        a.hear(Pos { x: 0, y: -4 });
+        a.lexicon.insert(FOOD_WORD, one_hot(Cell::Food));
+        a.hear(Pos { x: 0, y: -4 }, FOOD_WORD);
         assert_eq!(a.act(&open(20)), Action::Move(Dir::North));
+    }
+
+    #[test]
+    fn an_unknown_word_draws_nothing() {
+        let mut told = taught(0.0);
+        told.hear(Pos { x: 0, y: -4 }, FOOD_WORD);
+        let plans = told.plan(&open(20), 1.0);
+        assert_eq!(plans, taught(0.0).plan(&open(20), 1.0));
     }
 
     #[test]
