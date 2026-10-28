@@ -5,7 +5,10 @@
 
 pub mod agent;
 pub mod body;
+pub mod experiment;
 pub mod metrics;
+pub mod model;
+pub mod report;
 pub mod rng;
 pub mod sim;
 pub mod world;

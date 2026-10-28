@@ -92,12 +92,17 @@ impl Agent for Baseline {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::world::Pos;
 
     fn obs_with(here: Cell, east: Cell) -> Observation {
         let mut view = [Cell::Wall; 9];
         view[Observation::CENTER] = here;
         view[5] = east;
-        Observation { view, energy: 50 }
+        Observation {
+            view,
+            energy: 50,
+            offset: Pos { x: 0, y: 0 },
+        }
     }
 
     #[test]

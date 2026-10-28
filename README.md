@@ -7,17 +7,21 @@ square with everything it has learned intact.
 
 Design sketch: <https://claude.ai/artifact/NGoii1LqBsYDEWPomT7mSQ>
 
-## Status: phase 0
+## Status: phase 1
 
-The world, the body and the yardstick. No learning yet.
+The world, the body, the yardstick and a world model that learns.
+Phase 1 result: [docs/p1](docs/p1/README.md).
 
 | Module      | What it holds                                                   |
 |-------------|-----------------------------------------------------------------|
 | `world`     | Grid of `Empty`/`Wall`/`Food`/`Hazard`; out of bounds is a wall  |
-| `body`      | 3×3 egocentric view + energy; actions `Move(dir)`, `Eat`, `Rest` |
+| `body`      | 3×3 view, energy, path-integrated offset; `Move`, `Eat`, `Rest`  |
 | `sim`       | Energy rules, food regrowth, sleep-and-respawn; pure            |
 | `agent`     | `Agent` port and two baselines: `random` and `reflex`           |
 | `metrics`   | Meals, sleeps, bumps, hurts, mean energy, mean time to food     |
+| `model`     | World models: two-layer predictive coding; backprop baseline    |
+| `experiment`| Surprise-per-episode run and the pre-registered fallback rule   |
+| `report`    | CSV and SVG rendering of results                                |
 | `rng`       | SplitMix64, so checkpoints replay bit-for-bit                   |
 
 ## Run
@@ -30,10 +34,17 @@ cargo run -- --resume runs/reflex.json --steps 1000
 Prints a JSON summary. `--log` writes one JSON line per step; `--save` writes
 a checkpoint that `--resume` continues exactly.
 
+```sh
+cargo run --release --bin surprise -- --out docs/p1
+```
+
+Runs the phase 1 surprise experiment and writes `surprise.csv` and
+`surprise.svg`.
+
 ## Roadmap
 
-1. **P0** world, body, baselines, step log, checkpoints (this)
-2. **P1** predictive-coding world model; surprise curve
+1. **P0** world, body, baselines, step log, checkpoints (done)
+2. **P1** predictive-coding world model; surprise curve (this)
 3. **P2** action from homeostatic drive + curiosity
 4. **P3** dashboard (believed vs real map) and adaptation tests
 5. **P4** episodic diary, sleep replay, consolidation and decay

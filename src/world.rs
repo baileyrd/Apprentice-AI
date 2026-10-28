@@ -14,7 +14,7 @@ pub enum Cell {
 }
 
 /// A square on the grid.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Pos {
     pub x: i32,
     pub y: i32,
@@ -47,6 +47,11 @@ impl Pos {
     /// The neighbouring square in `dir`.
     pub fn step(self, dir: Dir) -> Pos {
         let (dx, dy) = dir.delta();
+        self.shift(dx, dy)
+    }
+
+    /// This square moved by `(dx, dy)`.
+    pub fn shift(self, dx: i32, dy: i32) -> Pos {
         Pos {
             x: self.x + dx,
             y: self.y + dy,
@@ -140,6 +145,16 @@ impl Grid {
         }
         let i = self.index(p);
         self.cells[i] = cell;
+    }
+
+    /// Every cell, row-major.
+    pub fn cells(&self) -> &[Cell] {
+        &self.cells
+    }
+
+    /// Every position, row-major.
+    pub fn positions(&self) -> impl Iterator<Item = Pos> + '_ {
+        (0..self.cells.len()).map(|i| self.pos_of(i))
     }
 
     /// All positions holding `cell`, row-major.
