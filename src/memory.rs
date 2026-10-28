@@ -20,7 +20,8 @@
 //! sends a curious apprentice back to look at them.
 //!
 //! **Contexts.** Each map's fit is a running mean of its prediction error on
-//! what is sensed now. When the active map stops fitting and another one fits,
+//! what is sensed now. When the active map stops fitting and another one fits
+//! clearly better (by `Recall::margin`),
 //! it recalls that one; when none has fitted for a while, it starts a new map
 //! from the active map's prior (general expectations, no particular squares). Before any
 //! switch the diary is consolidated into the map it was written in.
@@ -61,6 +62,10 @@ pub struct Recall {
     /// Sightings a map needs since the last switch before its fit counts, and
     /// sightings without any fitting map before it starts a new one.
     pub settle: usize,
+    /// How much lower an old map's running error must be than the active
+    /// map's before it is recalled: one dip in a stretch that suits any map
+    /// is not enough to go back.
+    pub margin: f64,
     /// Whether it learns and uses patterns.
     pub patterns: bool,
     /// Rate at which a replayed sighting moves a pattern.
@@ -79,6 +84,7 @@ impl Default for Recall {
             fit_rate: 0.02,
             misfit: 0.3,
             settle: 300,
+            margin: 0.15,
             patterns: true,
             pattern_rate: 0.05,
             pattern_min: 20,
@@ -257,7 +263,15 @@ impl Memory {
         self.lost = 0;
     }
 
-    /// Recalls a map that fits better, or starts a new one if none has fitted
+    /// Whether old map `i` fits what is sensed now, and clearly better than
+    /// the active map.
+    fn recognises(&self, i: usize) -> bool {
+        let r = self.recall;
+        let fit = self.contexts[i].fit;
+        fit <= r.misfit && fit + r.margin <= self.contexts[self.active].fit
+    }
+
+    /// Recalls a map that fits clearly better, or starts a new one if none has fitted
     /// for `settle` sightings.
     fn reconsider(&mut self, sightings: usize) {
         let r = self.recall;
@@ -275,7 +289,7 @@ impl Memory {
             .filter(|&i| i != self.active && counted(&self.contexts[i]))
             .min_by(|&i, &j| self.contexts[i].fit.total_cmp(&self.contexts[j].fit));
         match best {
-            Some(i) if self.contexts[i].fit <= r.misfit => self.switch(i),
+            Some(i) if self.recognises(i) => self.switch(i),
             _ if self.lost < r.settle => {}
             _ => {
                 let schema = self.contexts[self.active].map.schema();
@@ -363,6 +377,10 @@ impl WorldModel for Memory {
             sensed: t,
         };
         self.contexts[self.active].seen.insert(at, ate);
+    }
+
+    fn map_in_use(&self) -> Option<usize> {
+        Some(self.active)
     }
 }
 
@@ -602,5 +620,20 @@ mod tests {
         assert_eq!(m.active(), 0, "world A not recalled");
         assert_eq!(m.contexts(), 2);
         assert_eq!(m.believes(Pos { x: 3, y: 5 }), Some(Cell::Wall));
+    }
+
+    #[test]
+    fn an_old_map_is_recalled_only_when_it_fits_clearly_better() {
+        let mut m = memory();
+        let schema = m.contexts[0].map.schema();
+        m.contexts.push(Context::new(schema));
+        let mut fits = |active: f64, old: f64| {
+            m.contexts[0].fit = active;
+            m.contexts[1].fit = old;
+            m.recognises(1)
+        };
+        assert!(!fits(0.35, 0.28), "a near tie is not evidence");
+        assert!(fits(0.35, 0.15));
+        assert!(!fits(0.9, 0.35), "the old map must fit too");
     }
 }

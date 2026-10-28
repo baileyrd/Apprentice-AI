@@ -99,6 +99,11 @@ pub trait WorldModel {
 
     /// Eating at `at` fed the body. Models with a memory mark the moment.
     fn fed(&mut self, _at: Pos) {}
+
+    /// Which of its own maps it is using; `None` if it keeps only one.
+    fn map_in_use(&self) -> Option<usize> {
+        None
+    }
 }
 
 /// Most likely kind under `b`.

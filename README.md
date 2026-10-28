@@ -104,6 +104,13 @@ Lives three bush worlds then a fresh one, with patterns on and off: does it
 anticipate regrowth there, settle faster, and sleep less?
 
 ```sh
+cargo run --release --bin relearn -- --out docs/recognition/relearn
+```
+
+The A/B/A test also counts mix-ups: steps in world B spent on A's map
+([docs/recognition](docs/recognition/README.md)).
+
+```sh
 cargo run --release --bin dashboard -- --out docs/p3/dashboard.html
 ```
 
@@ -122,5 +129,6 @@ and patterns, showing which map it is using
 5. **P4** episodic diary, sleep replay, consolidation and decay (done)
 6. **Mentor** hints when stuck, faded, checked against its own senses (done)
 7. **Mentor lessons and naming** words learned from experience; a course of worlds (done)
-8. **Patterns** a slowest memory of how squares change, carried across worlds (this)
-9. Later: language, multiple apprentices
+8. **Patterns** a slowest memory of how squares change, carried across worlds (done)
+9. **Recognition** stronger evidence before going back to an old world's map (this)
+10. Later: language, multiple apprentices

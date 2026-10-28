@@ -8,22 +8,24 @@ use apprentice::adaptation::{Change, Setup as AdaptSetup};
 use apprentice::apprentice::{Apprentice, Drives};
 use apprentice::memory::{Memory, Recall};
 use apprentice::model::Rates;
-use apprentice::relearn::{self, Learning, Setup, Trace};
+use apprentice::relearn::{self, Learning, Setup, Trace, mixed_up};
 use apprentice::report::{self, Line};
 use apprentice::sim::SimError;
 
 const USAGE: &str = "\
-usage: relearn [--seeds N] [--phase STEPS] [--out DIR]
+usage: relearn [--seeds N] [--from SEED] [--phase STEPS] [--out DIR]
 
-Lives seeds 1..=N (default 10) through world A, world B (seed + 1000), then
+Lives seeds FROM..FROM+N-1 (default 1..10) through world A, world B (seed + 1000), then
 A again, each for STEPS (default 3000), in the bush world. Two minds: the
 phase 3 apprentice and the apprentice with memory. Prints learning times and
-writes DIR/relearn.csv and DIR/relearn.svg (default DIR: runs/relearn).";
+mix-ups (more than 100 steps in B on the map it ended A with), and writes DIR/relearn.csv and DIR/relearn.svg (default DIR: runs/relearn).";
 
 type Error = Box<dyn std::error::Error>;
 
 const MINDS: [&str; 2] = ["apprentice", "apprentice + memory"];
 const STRIDE: usize = 25;
+/// Steps in B on A's map beyond which a seed counts as mixed up.
+const MIX_UP: usize = 100;
 
 fn live(mind: &str, setup: &Setup) -> Result<Trace, SimError> {
     let (rates, seed) = (Rates::default(), setup.seed);
@@ -39,6 +41,7 @@ fn live(mind: &str, setup: &Setup) -> Result<Trace, SimError> {
 
 struct Args {
     seeds: u64,
+    from: u64,
     phase: usize,
     out: PathBuf,
 }
@@ -46,6 +49,7 @@ struct Args {
 fn parse(args: &[String]) -> Result<Args, String> {
     let mut parsed = Args {
         seeds: 10,
+        from: 1,
         phase: 3_000,
         out: PathBuf::from("runs/relearn"),
     };
@@ -59,6 +63,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
         };
         match flag.as_str() {
             "--seeds" => parsed.seeds = number()? as u64,
+            "--from" => parsed.from = number()? as u64,
             "--phase" => parsed.phase = number()?,
             "--out" => parsed.out = PathBuf::from(value),
             _ => return Err(format!("unknown flag: {flag}")),
@@ -121,21 +126,23 @@ fn curves<'a>(
         .collect()
 }
 
-fn csv(all: &[Vec<(Trace, Learning)>]) -> String {
-    let mut out =
-        String::from("mind,seed,target,first_a,b,second_a,on_return,savings,meals,sleeps\n");
+fn csv(all: &[Vec<(Trace, Learning)>], from: u64) -> String {
+    let mut out = String::from(
+        "mind,seed,target,first_a,b,second_a,on_return,savings,mixed_up,meals,sleeps\n",
+    );
     let cell = |v: Option<usize>| v.map_or(String::new(), |s| s.to_string());
     for (name, runs) in MINDS.iter().zip(all) {
         for (i, (t, l)) in runs.iter().enumerate() {
             out.push_str(&format!(
-                "{name},{},{:.4},{},{},{},{:.4},{},{},{}\n",
-                i + 1,
+                "{name},{},{:.4},{},{},{},{:.4},{},{},{},{}\n",
+                from + i as u64,
                 l.target,
                 cell(l.first_a),
                 cell(l.b),
                 cell(l.second_a),
                 l.on_return,
                 l.savings().map_or(String::new(), |v| format!("{v:.3}")),
+                mixed_up(t),
                 t.summary.meals,
                 t.summary.sleeps,
             ));
@@ -148,7 +155,7 @@ fn execute(args: &Args) -> Result<(), Error> {
     let config = AdaptSetup::for_change(Change::Food).config;
     println!("seed  {:>34}  {:>34}", MINDS[0], MINDS[1]);
     let mut all: Vec<Vec<(Trace, Learning)>> = vec![Vec::new(); MINDS.len()];
-    for seed in 1..=args.seeds {
+    for seed in args.from..args.from + args.seeds {
         let setup = Setup {
             config: config.clone(),
             seed,
@@ -188,17 +195,25 @@ fn execute(args: &Args) -> Result<(), Error> {
         let back = runs.iter().filter(|(_, l)| l.second_a.is_some()).count();
         let on_return = median(runs.iter().map(|(_, l)| l.on_return).collect());
         let sleeps = median(runs.iter().map(|(t, _)| t.summary.sleeps as f64).collect());
+        let mixed: Vec<String> = runs
+            .iter()
+            .zip(args.from..)
+            .filter(|((t, _), _)| mixed_up(t) > MIX_UP)
+            .map(|((t, _), seed)| format!("{seed}:{}", mixed_up(t)))
+            .collect();
         println!(
-            "{name:>20}: median A {:.0}, B {:.0}, A again {:.0} steps (relearned {back}/{}); savings {savings:.2}; map right on return {:.0}%; sleeps {sleeps:.0}",
+            "{name:>20}: median A {:.0}, B {:.0}, A again {:.0} steps (relearned {back}/{}); savings {savings:.2}; map right on return {:.0}%; sleeps {sleeps:.0}; mix-ups {} [{}]",
             time(|l| l.first_a),
             time(|l| l.b),
             time(|l| l.second_a),
             runs.len(),
             100.0 * on_return,
+            mixed.len(),
+            mixed.join(" "),
         );
     }
     fs::create_dir_all(&args.out)?;
-    fs::write(args.out.join("relearn.csv"), csv(&all))?;
+    fs::write(args.out.join("relearn.csv"), csv(&all, args.from))?;
     let surprise = curves(&all, |t| trailing(&t.surprise, 100));
     let map = curves(&all, |t| t.map.clone());
     let p = args.phase as f64;
