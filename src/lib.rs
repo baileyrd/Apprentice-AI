@@ -9,6 +9,7 @@ pub mod apprentice;
 pub mod body;
 pub mod experiment;
 pub mod memory;
+pub mod mentor;
 pub mod metrics;
 pub mod model;
 pub mod relearn;

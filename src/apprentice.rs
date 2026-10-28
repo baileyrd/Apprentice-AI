@@ -12,6 +12,12 @@
 //! for a while, in a world it has learned is volatile), planned over the
 //! believed map. No gradients, no ML library: delta rules and a shortest-path
 //! search.
+//!
+//! A mentor may point at a square ([`Apprentice::hear`]). The pointing never
+//! enters the world model: it only adds the food it promises, weighed by how
+//! far the apprentice trusts the mentor, to that square while planning. When
+//! the square comes into view, the apprentice checks it and moves its trust
+//! toward what it saw, by a delta rule.
 
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
@@ -148,7 +154,14 @@ pub struct Apprentice<M = PredictiveCoding> {
     /// What it tried last, its energy before, and where it stood.
     pending: Option<(Tried, f64, Pos)>,
     surprise: f64,
+    /// The square a mentor last pointed at, not yet checked.
+    hint: Option<Pos>,
+    /// Learned chance that a square the mentor points at holds food.
+    trust: f64,
 }
+
+/// Trust in a mentor before any of its hints has been checked.
+pub const TRUST_PRIOR: f64 = 0.5;
 
 impl Apprentice {
     /// An apprentice with the phase 1 world model and no memory.
@@ -170,7 +183,35 @@ impl<M: WorldModel> Apprentice<M> {
             t: 0,
             pending: None,
             surprise: 0.0,
+            hint: None,
+            trust: TRUST_PRIOR,
         }
+    }
+
+    /// A mentor points at `at` (relative to the wake square): "food there".
+    pub fn hear(&mut self, at: Pos) {
+        self.hint = Some(at);
+    }
+
+    /// Learned chance that the mentor's pointing is right.
+    pub fn trust(&self) -> f64 {
+        self.trust
+    }
+
+    /// Checks the hinted square once it is in view, learning trust from it.
+    fn check_hint(&mut self, obs: &Observation) {
+        let Some(at) = self.hint else {
+            return;
+        };
+        let Some(i) = (0..obs.view.len()).find(|&i| {
+            let (dx, dy) = Observation::view_delta(i);
+            obs.offset.shift(dx, dy) == at
+        }) else {
+            return;
+        };
+        let right = if obs.view[i] == Cell::Food { 1.0 } else { 0.0 };
+        self.trust += self.drives.learning * (right - self.trust);
+        self.hint = None;
     }
 
     /// Its world model.
@@ -232,7 +273,11 @@ impl<M: WorldModel> Apprentice<M> {
 
     fn utility(&self, at: Pos, hunger: f64) -> f64 {
         let b = self.model.predict(at);
-        hunger * self.food(&b) / self.drives.scale + self.drives.curiosity * self.novelty(at)
+        let mut food = self.food(&b);
+        if self.hint == Some(at) {
+            food += self.trust * self.valence.eat[kind(Cell::Food)].max(0.0);
+        }
+        hunger * food / self.drives.scale + self.drives.curiosity * self.novelty(at)
     }
 
     /// Best discounted utility reachable through each first step.
@@ -317,6 +362,7 @@ impl<M: WorldModel> Mind for Apprentice<M> {
         self.t += 1;
         self.learn_volatility(obs);
         self.surprise = self.model.observe(obs);
+        self.check_hint(obs);
         let (action, tried) = self.choose(obs);
         self.pending = Some((tried, f64::from(obs.energy), obs.offset));
         action
@@ -563,6 +609,35 @@ mod tests {
             matches!(action, Action::Move(Dir::West) | Action::Rest),
             "{action:?}"
         );
+    }
+
+    #[test]
+    fn a_checked_hint_moves_trust_toward_what_it_saw() {
+        let mut a = taught(0.0);
+        a.hear(Pos { x: 1, y: 0 });
+        let mut view = [Cell::Empty; VIEW * VIEW];
+        view[5] = Cell::Food; // east
+        a.act(&obs(view, 20));
+        assert!(a.trust() > TRUST_PRIOR);
+        a.hear(Pos { x: 1, y: 0 });
+        a.act(&open(20));
+        assert!(a.trust() < TRUST_PRIOR + 0.1);
+        assert_eq!(a.hint, None);
+    }
+
+    #[test]
+    fn an_unseen_hint_waits_to_be_checked() {
+        let mut a = taught(0.0);
+        a.hear(Pos { x: 5, y: 0 });
+        a.act(&open(20));
+        assert_eq!((a.hint, a.trust()), (Some(Pos { x: 5, y: 0 }), TRUST_PRIOR));
+    }
+
+    #[test]
+    fn a_hungry_apprentice_follows_a_trusted_hint() {
+        let mut a = taught(0.0);
+        a.hear(Pos { x: 0, y: -4 });
+        assert_eq!(a.act(&open(20)), Action::Move(Dir::North));
     }
 
     #[test]
