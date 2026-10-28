@@ -277,6 +277,12 @@ impl Memory {
         self.diary.len() - self.settled().0
     }
 
+    /// What its patterns say a square in state `last`, `age` steps old, is
+    /// now; `None` until that pattern is learned.
+    pub fn expects(&self, last: Last, age: u64) -> Option<Belief> {
+        self.patterns.predict(last, age)
+    }
+
     /// How it consolidates, forgets and recognises contexts.
     pub fn recall(&self) -> Recall {
         self.recall
