@@ -198,7 +198,8 @@ fn run(how: Foretell, seed: u64, steps: usize) -> Result<Outcome, SimError> {
     let (grows_back, stays_gone) = (life.meaning(GROWS_BACK), life.meaning(STAYS_GONE));
     let general = life.expected();
     let bush = life.live(bushes(), seed + 6_000, BUSH_STEPS)?;
-    let barren = Life::raised(how, seed, &barren(), steps)?.live(barren(), seed + 5_000, BARREN_STEPS)?;
+    let barren =
+        Life::raised(how, seed, &barren(), steps)?.live(barren(), seed + 5_000, BARREN_STEPS)?;
     Ok(Outcome {
         general,
         grows_back,
