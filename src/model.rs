@@ -96,6 +96,9 @@ pub trait WorldModel {
 
     /// The body slept. Models with a memory consolidate here.
     fn sleep(&mut self) {}
+
+    /// Eating at `at` fed the body. Models with a memory mark the moment.
+    fn fed(&mut self, _at: Pos) {}
 }
 
 /// Most likely kind under `b`.

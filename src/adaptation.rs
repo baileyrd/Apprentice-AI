@@ -318,10 +318,10 @@ mod tests {
             warmup: 600,
             after: 1_500,
             floor_window: 300,
-            seed: 6, // a world where it holds food beliefs when the food moves
+            seed: 5, // a world where it holds food beliefs when the food moves
             ..Setup::for_change(Change::Food)
         };
-        let mut curious = Apprentice::new(Drives::default(), Rates::default(), 6);
+        let mut curious = Apprentice::new(Drives::default(), Rates::default(), 5);
         let t = run(&setup, &mut curious).expect("room");
         assert!(t.first_meal.is_some(), "never ate after the food moved");
         assert!(t.stale > 0, "believed in no food before the move");

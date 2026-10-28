@@ -14,7 +14,8 @@ apprentice that chooses its own actions from drive and curiosity, a replay
 dashboard, and a memory: a diary replayed into per-world maps in sleep, with
 consolidation and decay.
 Results: [phase 1](docs/p1/README.md), [phase 2](docs/p2/README.md),
-[phase 3](docs/p3/README.md), [phase 4](docs/p4/README.md).
+[phase 3](docs/p3/README.md), [phase 4](docs/p4/README.md),
+[energy fix](docs/energy/README.md).
 
 | Module      | What it holds                                                   |
 |-------------|-----------------------------------------------------------------|
@@ -63,6 +64,13 @@ cargo run --release --bin relearn -- --out docs/p4
 
 Runs the phase 4 test: world A, then B, then A again, with and without
 memory.
+
+```sh
+cargo run --release --bin energy -- --out docs/energy
+```
+
+Compares sleeps and meals against an agent that sees the real map, and
+breaks down the energy fix (meal replay, patience).
 
 ```sh
 cargo run --release --bin dashboard -- --out docs/p3/dashboard.html
