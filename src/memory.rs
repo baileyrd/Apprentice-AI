@@ -26,6 +26,13 @@
 //! from the active map's prior (general expectations, no particular squares). Before any
 //! switch the diary is consolidated into the map it was written in.
 //!
+//! **Doubt.** Misfit builds doubt and fit drains it, so a few steps that
+//! happen to look familiar do not wipe out the evidence of being elsewhere.
+//! While in doubt, what it senses is held in the diary rather than written
+//! into the map in use, so a strange place cannot be learned into home's map
+//! while it is still deciding. A bush it ate from is judged by when patterns
+//! say it grows back: an expected change is no sign of being somewhere else.
+//!
 //! A full diary forces a nap: the same consolidation, without world time.
 //! Every update is a local delta rule; nothing is trained end to end.
 //!
@@ -37,7 +44,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::body::Observation;
+use crate::body::{Observation, VIEW};
 use crate::model::{Belief, PredictiveCoding, Rates, WorldModel, error, most_likely, one_hot};
 use crate::patterns::{Last, Patterns};
 use crate::world::{Cell, Pos};
@@ -130,11 +137,13 @@ impl Context {
         }
     }
 
-    fn judge(&mut self, at: Pos, sensed: Cell, rate: f64) {
+    /// Scores the map on one sighting; `expected` overrides the map where
+    /// a known change (a bush growing back) says what to expect instead.
+    fn judge(&mut self, at: Pos, sensed: Cell, rate: f64, expected: Option<Belief>) {
         if !self.map.knows(at) {
             return;
         }
-        let e = error(&self.map.predict(at), sensed);
+        let e = error(&expected.unwrap_or_else(|| self.map.predict(at)), sensed);
         self.fit = if self.samples == 0 {
             e
         } else {
@@ -157,9 +166,12 @@ pub struct Memory {
     active: usize,
     t: u64,
     last_sleep: u64,
-    /// Sightings since the active map last fitted, and the step it stopped.
+    /// Doubt: sightings of misfit, less sightings of fit since, and the step
+    /// it began.
     lost: usize,
     lost_since: u64,
+    /// Diary and meal entries made before the doubt began.
+    doubt: (usize, usize),
     patterns: Patterns,
 }
 
@@ -183,6 +195,7 @@ impl Memory {
             last_sleep: 0,
             lost: 0,
             lost_since: 0,
+            doubt: (0, 0),
             patterns: Patterns::new(recall.pattern_rate, recall.pattern_min),
         }
     }
@@ -211,9 +224,10 @@ impl Memory {
     /// lets the rest decay, then empties the diary.
     fn consolidate(&mut self) {
         let elapsed = (self.t - self.last_sleep) as f64;
+        let (d, m) = self.settled();
         let ctx = &mut self.contexts[self.active];
         let mut rehearsed = HashSet::new();
-        for &(at, sensed, before) in &self.diary {
+        for &(at, sensed, before) in &self.diary[..d] {
             if ctx.map.believes(at) == Some(sensed) {
                 *ctx.stiffness.entry(at).or_insert(0) += 1;
             }
@@ -223,7 +237,7 @@ impl Memory {
                 self.patterns.learn(last, age, sensed);
             }
         }
-        for &at in &self.meals {
+        for &at in &self.meals[..m] {
             for _ in 0..self.recall.meal_replays {
                 ctx.map.learn(at, Cell::Food);
             }
@@ -234,10 +248,23 @@ impl Memory {
             let amount = (self.recall.decay * elapsed / (1.0 + stiff)).min(1.0);
             ctx.map.fade(at, amount);
         }
-        self.diary.clear();
-        self.meals.clear();
+        self.diary.drain(..d);
+        self.meals.drain(..m);
+        self.doubt = (0, 0);
         self.fast.clear();
         self.last_sleep = self.t;
+    }
+
+    /// Diary and meal entries it is sure belong to the active map: while in
+    /// doubt, only those from before the doubt began, unless the doubt alone
+    /// has filled the diary.
+    fn settled(&self) -> (usize, usize) {
+        let all = (self.diary.len(), self.meals.len());
+        let held = self.diary.len() - self.doubt.0;
+        if self.lost == 0 || held >= self.recall.capacity * VIEW * VIEW {
+            return all;
+        }
+        self.doubt
     }
 
     /// Consolidates, then makes `to` the active map. What was sensed since the
@@ -278,11 +305,13 @@ impl Memory {
         let counted = |c: &Context| c.samples >= r.settle;
         let current = &self.contexts[self.active];
         if !counted(current) || current.fit <= r.misfit {
-            self.lost = 0;
+            // Doubt drains as the map fits again; it does not vanish.
+            self.lost = self.lost.saturating_sub(sightings);
             return;
         }
         if self.lost == 0 {
             self.lost_since = self.t;
+            self.doubt = (self.diary.len().saturating_sub(sightings), self.meals.len());
         }
         self.lost += sightings;
         let best = (0..self.contexts.len())
@@ -338,8 +367,19 @@ impl WorldModel for Memory {
         self.diary
             .push((at, sensed, before.map(|s| (s.last, t - s.since))));
         let rate = self.recall.fit_rate;
-        for ctx in &mut self.contexts {
-            ctx.judge(at, sensed, rate);
+        // A bush it ate from is judged by when it should grow back, not by
+        // the map: an expected change is no sign of being somewhere else.
+        let (active, patterns, on) = (self.active, &self.patterns, self.recall.patterns);
+        for (i, ctx) in self.contexts.iter_mut().enumerate() {
+            let state = if i == active {
+                before
+            } else {
+                ctx.seen.get(&at).copied()
+            };
+            let expected = state
+                .filter(|s| on && s.last == Last::Ate)
+                .and_then(|s| patterns.predict(s.last, t - s.since));
+            ctx.judge(at, sensed, rate, expected);
         }
         surprise
     }
@@ -635,5 +675,64 @@ mod tests {
         assert!(!fits(0.35, 0.28), "a near tie is not evidence");
         assert!(fits(0.35, 0.15));
         assert!(!fits(0.9, 0.35), "the old map must fit too");
+    }
+
+    #[test]
+    fn doubt_drains_rather_than_vanishing() {
+        let mut m = memory();
+        m.contexts[0].samples = m.recall.settle;
+        m.contexts[0].fit = 0.9;
+        m.reconsider(9);
+        m.reconsider(9);
+        m.contexts[0].fit = 0.1;
+        m.reconsider(9);
+        assert_eq!(m.lost, 9, "one good step does not erase two bad ones");
+    }
+
+    #[test]
+    fn what_is_sensed_in_doubt_stays_out_of_the_map() {
+        let mut m = no_naps(false);
+        m.lost = 100; // in doubt from before anything below was sensed
+        let far = Pos { x: 50, y: 50 };
+        m.observe(&at(far, corner()));
+        m.sleep();
+        assert!(
+            !m.contexts[0].map.knows(far),
+            "doubtful sighting written in"
+        );
+        m.lost = 0;
+        m.sleep();
+        assert!(m.contexts[0].map.knows(far));
+    }
+
+    #[test]
+    fn an_expected_regrowth_is_no_sign_of_being_elsewhere() {
+        let mut rises = Vec::new();
+        for patterns in [false, true] {
+            let mut m = no_naps(patterns);
+            for i in 0..40 {
+                eat_and_watch(&mut m, Pos { x: 10 * i, y: 0 });
+                m.sleep();
+            }
+            // A square the map knows as empty, eaten from 40 steps ago.
+            let bush = Pos { x: 0, y: 20 };
+            for _ in 0..20 {
+                m.observe(&at(bush, [Cell::Empty; VIEW * VIEW]));
+            }
+            m.sleep();
+            let ate = Seen {
+                last: Last::Ate,
+                since: m.t - 40,
+                sensed: m.t - 40,
+            };
+            m.contexts[0].seen.insert(bush, ate);
+            let before = m.contexts[0].fit;
+            let mut v = [Cell::Empty; VIEW * VIEW];
+            v[Observation::CENTER] = Cell::Food;
+            m.observe(&at(bush, v));
+            rises.push(m.contexts[0].fit - before);
+        }
+        assert!(rises[0] > 0.02, "without patterns: {}", rises[0]);
+        assert!(rises[1] < 0.01, "with patterns: {}", rises[1]);
     }
 }
