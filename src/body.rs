@@ -14,23 +14,33 @@ pub struct Observation {
     /// the agent's own square.
     pub view: [Cell; VIEW * VIEW],
     pub energy: u32,
+    /// Path integration: displacement from the square it last woke on.
+    /// A sense of its own body, not knowledge of the world.
+    pub offset: Pos,
 }
 
 impl Observation {
     /// Index of the agent's own square in `view`.
     pub const CENTER: usize = VIEW * VIEW / 2;
 
-    /// Senses the grid around `pos`.
-    pub fn sense(grid: &Grid, pos: Pos, energy: u32) -> Self {
+    /// `(dx, dy)` of view index `i` relative to the agent.
+    pub fn view_delta(i: usize) -> (i32, i32) {
+        let (i, side) = (i as i32, VIEW as i32);
+        (i % side - 1, i / side - 1)
+    }
+
+    /// Senses the grid around `pos`, which lies `offset` from the wake square.
+    pub fn sense(grid: &Grid, pos: Pos, energy: u32, offset: Pos) -> Self {
         let mut view = [Cell::Wall; VIEW * VIEW];
         for (i, cell) in view.iter_mut().enumerate() {
-            let (dx, dy) = (i as i32 % 3 - 1, i as i32 / 3 - 1);
-            *cell = grid.get(Pos {
-                x: pos.x + dx,
-                y: pos.y + dy,
-            });
+            let (dx, dy) = Self::view_delta(i);
+            *cell = grid.get(pos.shift(dx, dy));
         }
-        Self { view, energy }
+        Self {
+            view,
+            energy,
+            offset,
+        }
     }
 
     /// The cell next to the agent in `dir`.
@@ -61,11 +71,12 @@ mod tests {
     fn sense_reads_neighbours_and_walls_at_edge() {
         let mut g = Grid::empty(3, 3);
         g.set(Pos { x: 1, y: 0 }, Cell::Food);
-        let obs = Observation::sense(&g, Pos { x: 1, y: 1 }, 10);
+        let origin = Pos { x: 0, y: 0 };
+        let obs = Observation::sense(&g, Pos { x: 1, y: 1 }, 10, origin);
         assert_eq!(obs.toward(Dir::North), Cell::Food);
         assert_eq!(obs.here(), Cell::Empty);
 
-        let corner = Observation::sense(&g, Pos { x: 0, y: 0 }, 10);
+        let corner = Observation::sense(&g, Pos { x: 0, y: 0 }, 10, origin);
         assert_eq!(corner.toward(Dir::West), Cell::Wall);
         assert_eq!(corner.toward(Dir::North), Cell::Wall);
         assert_eq!(corner.toward(Dir::East), Cell::Food);

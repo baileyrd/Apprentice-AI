@@ -129,6 +129,11 @@ impl Sim {
         self.pos
     }
 
+    /// The square the agent wakes on after sleep.
+    pub fn start(&self) -> Pos {
+        self.start
+    }
+
     pub fn energy(&self) -> u32 {
         self.energy
     }
@@ -140,7 +145,8 @@ impl Sim {
 
     /// What the agent senses right now.
     pub fn observe(&self) -> Observation {
-        Observation::sense(&self.grid, self.pos, self.energy)
+        let offset = self.pos.shift(-self.start.x, -self.start.y);
+        Observation::sense(&self.grid, self.pos, self.energy, offset)
     }
 
     /// Applies one action and advances time.
