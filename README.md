@@ -109,6 +109,9 @@ cargo run --release --bin dashboard -- --out docs/p3/dashboard.html
 
 Writes a self-contained page replaying one life: real map against believed
 map, surprise and energy, as the walls and then the food move.
+`--story return --seed 6` replays world A, then B, then A again with memory
+and patterns, showing which map it is using
+([docs/patterns/return.html](docs/patterns/return.html)).
 
 ## Roadmap
 

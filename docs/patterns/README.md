@@ -156,5 +156,10 @@ not to expect the same thing twice. I tested both on seeds 1–10:
 - The moved-not-copied bug above also played a small part (0.50 before the
   fix, 0.46 after).
 
+You can watch it happen in [return.html](return.html), a replay of seed 6
+(`cargo run --release --bin dashboard -- --story return --seed 6`). The band
+under the chart shows which map it is using. In world B it flips back to A's
+map again and again between steps 3,600 and 5,800.
+
 The fix would be in how it recognises a world: it should need stronger
 evidence before going back to an old map. That would be its own change.
