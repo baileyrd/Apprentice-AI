@@ -122,6 +122,14 @@ Replays the home trials step by step: what it believes about each square and
 how it knows it (pattern, diary or map), what its home map holds, each map's
 fit, its doubt and its answer ([docs/home/mind.html](docs/home/mind.html)).
 
+```sh
+cargo run --release --bin unlearn -- --out docs/unlearn
+```
+
+Raises it on regrowing bushes for 1,000, 3,000 or 9,000 steps, then moves it
+to a world where they never regrow: how long does the belief last
+([docs/unlearn](docs/unlearn/README.md))?
+
 The A/B/A test also counts mix-ups: steps in world B spent on A's map
 ([docs/recognition](docs/recognition/README.md)).
 
@@ -146,5 +154,6 @@ and patterns, showing which map it is using
 7. **Mentor lessons and naming** words learned from experience; a course of worlds (done)
 8. **Patterns** a slowest memory of how squares change, carried across worlds (done)
 9. **Recognition** stronger evidence before going back to an old world's map (done)
-10. **Home** knowing its own world: doubt that builds up, held memories, expected regrowth (this)
-11. Later: language, multiple apprentices
+10. **Home** knowing its own world: doubt that builds up, held memories, expected regrowth (done)
+11. **Unlearning** how long a disproven pattern lasts, against how long it was held (this)
+12. Later: language, multiple apprentices
