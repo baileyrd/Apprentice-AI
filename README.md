@@ -7,10 +7,11 @@ square with everything it has learned intact.
 
 Design sketch: <https://claude.ai/artifact/NGoii1LqBsYDEWPomT7mSQ>
 
-## Status: phase 1
+## Status: phase 2
 
-The world, the body, the yardstick and a world model that learns.
-Phase 1 result: [docs/p1](docs/p1/README.md).
+The world, the body, the yardstick, a world model that learns, and an
+apprentice that chooses its own actions from drive and curiosity.
+Results: [phase 1](docs/p1/README.md), [phase 2](docs/p2/README.md).
 
 | Module      | What it holds                                                   |
 |-------------|-----------------------------------------------------------------|
@@ -20,6 +21,8 @@ Phase 1 result: [docs/p1](docs/p1/README.md).
 | `agent`     | `Agent` port and two baselines: `random` and `reflex`           |
 | `metrics`   | Meals, sleeps, bumps, hurts, mean energy, mean time to food     |
 | `model`     | World models: two-layer predictive coding; backprop baseline    |
+| `apprentice`| The learner: learned valence and volatility, drive + curiosity  |
+| `adaptation`| Phase 2 experiment: move half the walls, time the recovery      |
 | `experiment`| Surprise-per-episode run and the pre-registered fallback rule   |
 | `report`    | CSV and SVG rendering of results                                |
 | `rng`       | SplitMix64, so checkpoints replay bit-for-bit                   |
@@ -41,11 +44,17 @@ cargo run --release --bin surprise -- --out docs/p1
 Runs the phase 1 surprise experiment and writes `surprise.csv` and
 `surprise.svg`.
 
+```sh
+cargo run --release --bin adapt -- --out docs/p2
+```
+
+Runs the phase 2 adaptation experiment across 10 seeds and three minds.
+
 ## Roadmap
 
 1. **P0** world, body, baselines, step log, checkpoints (done)
-2. **P1** predictive-coding world model; surprise curve (this)
-3. **P2** action from homeostatic drive + curiosity
+2. **P1** predictive-coding world model; surprise curve (done)
+3. **P2** action from homeostatic drive + curiosity (this)
 4. **P3** dashboard (believed vs real map) and adaptation tests
 5. **P4** episodic diary, sleep replay, consolidation and decay
 6. Later: mentor, language, multiple apprentices

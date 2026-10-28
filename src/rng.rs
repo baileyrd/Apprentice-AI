@@ -34,8 +34,12 @@ impl Rng {
 
     /// True with probability `p` (clamped to `0.0..=1.0`).
     pub fn chance(&mut self, p: f64) -> bool {
-        let unit = (self.next_u64() >> 11) as f64 / (1u64 << 53) as f64;
-        unit < p
+        self.unit() < p
+    }
+
+    /// Uniform float in `0.0..1.0`.
+    pub fn unit(&mut self) -> f64 {
+        (self.next_u64() >> 11) as f64 / (1u64 << 53) as f64
     }
 
     /// Picks one item uniformly, or `None` when empty.

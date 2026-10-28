@@ -3,7 +3,9 @@
 //! Phase 0 is the world, the body, two baselines and the measurements; no
 //! learning yet. Everything here is pure; I/O lives in the binary.
 
+pub mod adaptation;
 pub mod agent;
+pub mod apprentice;
 pub mod body;
 pub mod experiment;
 pub mod metrics;
