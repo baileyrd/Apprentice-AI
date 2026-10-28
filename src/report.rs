@@ -239,9 +239,17 @@ fn line_plot(s: &mut String, p: &Plot) {
     }
 }
 
-/// Phase 2 figure: median trailing surprise and map accuracy around the wall
-/// move, then each seed's adaptation time per mind.
+/// Titles and map range for an adaptation figure.
+pub struct Figure<'a> {
+    pub title: &'a str,
+    pub map_title: &'a str,
+    pub map_range: (f64, f64),
+}
+
+/// Adaptation figure: trailing surprise and the map measure around the
+/// change, then each seed's adaptation time per mind.
 pub fn adaptation_svg(
+    figure: &Figure,
     surprise: &[Line],
     accuracy: &[Line],
     times: &[(&str, Vec<Option<usize>>)],
@@ -258,7 +266,8 @@ pub fn adaptation_svg(
     );
     let _ = write!(
         s,
-        r#"<text x="{PAD}" y="32" font-size="18" font-weight="600" fill="{INK}">Adapting after half the walls move</text><text x="{PAD}" y="52" font-size="13" fill="{INK_2}">Median over seeds. Step 0 is the first step after the move.</text>"#
+        r#"<text x="{PAD}" y="32" font-size="18" font-weight="600" fill="{INK}">{}</text><text x="{PAD}" y="52" font-size="13" fill="{INK_2}">Over 10 seeds. Step 0 is the first step after the change.</text>"#,
+        figure.title,
     );
     let ticks = step_ticks(x_range);
     let surprise_top = nice_ceiling(peak(surprise).max(1e-6));
@@ -271,9 +280,9 @@ pub fn adaptation_svg(
         ),
         (
             accuracy,
-            "Share of the believed map that is right (walls, hazards, open floor)",
+            figure.map_title,
             70.0 + panel_h + 30.0,
-            (0.8, 1.0),
+            figure.map_range,
         ),
     ];
     for (lines, title, top, (y_min, y_max)) in panels {
@@ -289,12 +298,12 @@ pub fn adaptation_svg(
                 height: panel_h - 20.0,
                 x_range,
                 x_ticks: ticks.clone(),
-                x_label: "steps after the move",
+                x_label: "steps after the change",
                 y_min,
                 y_max,
                 lines,
                 h_guides: Vec::new(),
-                v_guides: vec![(0.0, "walls move")],
+                v_guides: vec![(0.0, "change")],
             },
         );
     }
