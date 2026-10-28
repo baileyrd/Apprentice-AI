@@ -75,7 +75,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 <main>
   <header>
     <h1>Apprentice replay</h1>
-    <p class="lede" id="lede">One life of the curious apprentice. Half the walls move, then all the food moves. Watch what it believes catch up with what is there.</p>
+    <p class="lede" id="lede"></p>
   </header>
 
   <section class="readouts" aria-label="Current step">
@@ -83,6 +83,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
     <div class="readout"><span>Surprise, last 100 steps</span><b id="r-surprise">0</b></div>
     <div class="readout"><span>Squares believed right</span><b id="r-right">0</b></div>
     <div class="readout"><span>Meals / sleeps so far</span><b id="r-meals">0</b></div>
+    <div class="readout" id="map-readout" hidden><span>Memory map in use</span><b id="r-map">0</b></div>
   </section>
 
   <section class="maps">
@@ -124,6 +125,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
       <li><i class="sw line" style="background:var(--accent)"></i>surprise, mean of last 100 steps</li>
       <li><i class="sw line" style="background:var(--hazard)"></i>energy, mean of last 100 steps</li>
       <li><i class="sw line" style="background:var(--food)"></i>share of squares believed right</li>
+      <li id="map-key" hidden><i class="sw line" style="background:var(--accent)"></i><i class="sw line" style="background:var(--hazard)"></i>band under the axis: memory map in use (first map blue, second orange)</li>
     </ul>
   </figure>
 
@@ -200,7 +202,7 @@ function drawMap(canvas, map, truth, t) {
   ctx.lineWidth = 2; ctx.strokeStyle = css("--panel"); ctx.stroke();
 }
 
-const PAD = { l: 44, r: 16, t: 22, b: 28 };
+const PAD = { l: 44, r: 16, t: 22, b: LIFE.maps.length ? 40 : 28 };
 function drawChart(t) {
   const canvas = $("chart"), { ctx, w, h } = fit(canvas);
   const iw = w - PAD.l - PAD.r, ih = h - PAD.t - PAD.b;
@@ -235,6 +237,14 @@ function drawChart(t) {
     }
     ctx.stroke();
   }
+  if (LIFE.maps.length) {
+    // A band under the axis: which memory map was in use, step by step.
+    const colors = ["--accent", "--hazard", "--food", "--wall"];
+    for (let s = 0; s < N; s += step) {
+      ctx.fillStyle = css(colors[Math.min(LIFE.maps[s], colors.length - 1)]);
+      ctx.fillRect(X(s), h - 10, Math.max(1, X(s + step) - X(s)), 8);
+    }
+  }
   ctx.strokeStyle = css("--ink"); ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(X(t), PAD.t); ctx.lineTo(X(t), h - PAD.b); ctx.stroke();
 }
@@ -249,9 +259,23 @@ function render() {
   $("r-surprise").textContent = trail[t].toFixed(4);
   $("r-right").textContent = `${Math.round(right[t] * real.length)} / ${real.length}`;
   $("r-meals").textContent = `${meals[t]} / ${sleeps[t]}`;
+  if (LIFE.maps.length) $("r-map").textContent = mapName(LIFE.maps[t]);
   $("clock").textContent = `${(t + 1).toLocaleString()} / ${N.toLocaleString()}`;
   $("scrub").value = t;
 }
+
+/** Names each memory map by the world it was first used in: "B's map", "B's 2nd map". */
+const mapNames = (() => {
+  const names = [], count = {};
+  LIFE.maps.forEach((m, t) => {
+    if (names[m] !== undefined) return;
+    const w = t < LIFE.marks[0].t || t >= LIFE.marks[1].t ? "A" : "B";
+    count[w] = (count[w] ?? 0) + 1;
+    names[m] = count[w] === 1 ? `${w}'s map` : `${w}'s ${count[w]}${count[w] === 2 ? "nd" : count[w] === 3 ? "rd" : "th"} map`;
+  });
+  return names;
+})();
+function mapName(i) { return mapNames[i] ?? `map ${i + 1}`; }
 
 function seek(s) { t = Math.max(0, Math.min(N - 1, s)); render(); }
 
@@ -288,7 +312,8 @@ for (const m of LIFE.marks) {
   b.addEventListener("click", () => seek(m.t - 20));
   $("jumps").append(b, " ");
 }
-$("lede").textContent += ` World seed ${LIFE.seed}, ${N.toLocaleString()} steps; ${LIFE.marks.map((m) => `${m.label} at step ${m.t.toLocaleString()}`).join(", ")}.`;
+$("map-readout").hidden = $("map-key").hidden = !LIFE.maps.length;
+$("lede").textContent = `${LIFE.lede} World seed ${LIFE.seed}, ${N.toLocaleString()} steps; ${LIFE.marks.map((m) => `${m.label} at step ${m.t.toLocaleString()}`).join(", ")}.`;
 window.addEventListener("resize", render);
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
 new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });

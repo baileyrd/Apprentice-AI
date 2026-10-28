@@ -27,11 +27,18 @@
 //!
 //! A full diary forces a nap: the same consolidation, without world time.
 //! Every update is a local delta rule; nothing is trained end to end.
+//!
+//! **Patterns** (the slowest store, [`crate::patterns`]) learn in sleep from
+//! every world how squares change: what a square becomes, given how it last
+//! changed and how long ago. They refine the diary's beliefs about squares
+//! seen today: a bush eaten an hour ago is expected to have grown back, in a
+//! world where the apprentice has never seen that bush grow.
 
 use std::collections::{HashMap, HashSet};
 
 use crate::body::Observation;
 use crate::model::{Belief, PredictiveCoding, Rates, WorldModel, error, most_likely, one_hot};
+use crate::patterns::{Last, Patterns};
 use crate::world::{Cell, Pos};
 
 /// How the memory consolidates, forgets and recognises contexts.
@@ -54,6 +61,12 @@ pub struct Recall {
     /// Sightings a map needs since the last switch before its fit counts, and
     /// sightings without any fitting map before it starts a new one.
     pub settle: usize,
+    /// Whether it learns and uses patterns.
+    pub patterns: bool,
+    /// Rate at which a replayed sighting moves a pattern.
+    pub pattern_rate: f64,
+    /// Samples a pattern needs before it predicts.
+    pub pattern_min: u32,
 }
 
 impl Default for Recall {
@@ -66,9 +79,25 @@ impl Default for Recall {
             fit_rate: 0.02,
             misfit: 0.3,
             settle: 300,
+            patterns: true,
+            pattern_rate: 0.05,
+            pattern_min: 20,
         }
     }
 }
+
+/// A square's state for patterns: how it last changed, since when, and when
+/// it was last sensed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Seen {
+    last: Last,
+    since: u64,
+    sensed: u64,
+}
+
+/// A sighting in the diary, with the square's state and that state's age
+/// just before it.
+type Sighting = (Pos, Cell, Option<(Last, u64)>);
 
 /// One slow map and what memory keeps about it.
 #[derive(Debug, Clone)]
@@ -80,6 +109,8 @@ struct Context {
     /// it rests on.
     fit: f64,
     samples: usize,
+    /// How each square last changed, when, and when it was last sensed.
+    seen: HashMap<Pos, Seen>,
 }
 
 impl Context {
@@ -89,6 +120,7 @@ impl Context {
             stiffness: HashMap::new(),
             fit: 0.0,
             samples: 0,
+            seen: HashMap::new(),
         }
     }
 
@@ -112,15 +144,17 @@ pub struct Memory {
     recall: Recall,
     sensory: f64,
     fast: HashMap<Pos, Belief>,
-    diary: Vec<(Pos, Cell)>,
+    diary: Vec<Sighting>,
     /// Where it ate today.
     meals: Vec<Pos>,
     contexts: Vec<Context>,
     active: usize,
     t: u64,
     last_sleep: u64,
-    /// Sightings since the active map last fitted.
+    /// Sightings since the active map last fitted, and the step it stopped.
     lost: usize,
+    lost_since: u64,
+    patterns: Patterns,
 }
 
 impl Memory {
@@ -142,7 +176,19 @@ impl Memory {
             t: 0,
             last_sleep: 0,
             lost: 0,
+            lost_since: 0,
+            patterns: Patterns::new(recall.pattern_rate, recall.pattern_min),
         }
+    }
+
+    /// What patterns say about a square seen in this world; `None` if they
+    /// are off, the square is unseen, or the pattern is not yet learned.
+    fn anticipate(&self, at: Pos) -> Option<Belief> {
+        if !self.recall.patterns {
+            return None;
+        }
+        let seen = self.contexts[self.active].seen.get(&at)?;
+        self.patterns.predict(seen.last, self.t - seen.since)
     }
 
     /// Index of the map in use.
@@ -161,12 +207,15 @@ impl Memory {
         let elapsed = (self.t - self.last_sleep) as f64;
         let ctx = &mut self.contexts[self.active];
         let mut rehearsed = HashSet::new();
-        for &(at, sensed) in &self.diary {
+        for &(at, sensed, before) in &self.diary {
             if ctx.map.believes(at) == Some(sensed) {
                 *ctx.stiffness.entry(at).or_insert(0) += 1;
             }
             ctx.map.learn(at, sensed);
             rehearsed.insert(at);
+            if let (true, Some((last, age))) = (self.recall.patterns, before) {
+                self.patterns.learn(last, age, sensed);
+            }
         }
         for &at in &self.meals {
             for _ in 0..self.recall.meal_replays {
@@ -185,9 +234,22 @@ impl Memory {
         self.last_sleep = self.t;
     }
 
-    /// Consolidates, then makes `to` the active map.
+    /// Consolidates, then makes `to` the active map. What was sensed since the
+    /// old map stopped fitting belongs to the new one's world, so its square
+    /// states move across.
     fn switch(&mut self, to: usize) {
         self.consolidate();
+        let since = self.lost_since;
+        let seen = &mut self.contexts[self.active].seen;
+        let recent: Vec<(Pos, Seen)> = seen
+            .iter()
+            .filter(|(_, s)| s.sensed >= since)
+            .map(|(&at, &s)| (at, s))
+            .collect();
+        for (at, _) in &recent {
+            seen.remove(at);
+        }
+        self.contexts[to].seen.extend(recent);
         self.active = to;
         for ctx in &mut self.contexts {
             ctx.samples = 0;
@@ -204,6 +266,9 @@ impl Memory {
         if !counted(current) || current.fit <= r.misfit {
             self.lost = 0;
             return;
+        }
+        if self.lost == 0 {
+            self.lost_since = self.t;
         }
         self.lost += sightings;
         let best = (0..self.contexts.len())
@@ -244,7 +309,20 @@ impl WorldModel for Memory {
         let fast =
             std::array::from_fn(|k| predicted[k] + self.sensory * (target[k] - predicted[k]));
         self.fast.insert(at, fast);
-        self.diary.push((at, sensed));
+        let t = self.t;
+        let seen = &mut self.contexts[self.active].seen;
+        let before = seen.get(&at).copied();
+        let next = match before {
+            Some(s) if s.last.looks() == sensed => Seen { sensed: t, ..s },
+            _ => Seen {
+                last: Last::Saw(sensed),
+                since: t,
+                sensed: t,
+            },
+        };
+        seen.insert(at, next);
+        self.diary
+            .push((at, sensed, before.map(|s| (s.last, t - s.since))));
         let rate = self.recall.fit_rate;
         for ctx in &mut self.contexts {
             ctx.judge(at, sensed, rate);
@@ -253,6 +331,9 @@ impl WorldModel for Memory {
     }
 
     fn predict(&self, at: Pos) -> Belief {
+        if let Some(b) = self.anticipate(at) {
+            return b;
+        }
         match self.fast.get(&at) {
             Some(b) => *b,
             None => self.contexts[self.active].map.predict(at),
@@ -260,6 +341,9 @@ impl WorldModel for Memory {
     }
 
     fn believes(&self, at: Pos) -> Option<Cell> {
+        if let Some(b) = self.anticipate(at) {
+            return most_likely(&b);
+        }
         match self.fast.get(&at) {
             Some(b) => most_likely(b),
             None => self.contexts[self.active].map.believes(at),
@@ -272,6 +356,13 @@ impl WorldModel for Memory {
 
     fn fed(&mut self, at: Pos) {
         self.meals.push(at);
+        let t = self.t;
+        let ate = Seen {
+            last: Last::Ate,
+            since: t,
+            sensed: t,
+        };
+        self.contexts[self.active].seen.insert(at, ate);
     }
 }
 
@@ -417,6 +508,87 @@ mod tests {
             });
             m.observe(&at(offset, view));
         }
+    }
+
+    /// Sees food at `bush`, eats it, then watches it from beside: empty for
+    /// 32 steps, then food again.
+    fn eat_and_watch(m: &mut Memory, bush: Pos) {
+        let beside = bush.shift(1, 0);
+        let mut v = [Cell::Empty; VIEW * VIEW];
+        v[3] = Cell::Food; // west
+        m.observe(&at(beside, v));
+        m.fed(bush);
+        v[3] = Cell::Empty;
+        for _ in 0..32 {
+            m.observe(&at(beside, v));
+        }
+        v[3] = Cell::Food;
+        m.observe(&at(beside, v));
+    }
+
+    /// A memory that never naps on its own.
+    fn no_naps(patterns: bool) -> Memory {
+        Memory::new(
+            Rates::default(),
+            Recall {
+                capacity: 1_000,
+                patterns,
+                ..Recall::default()
+            },
+        )
+    }
+
+    #[test]
+    fn patterns_anticipate_regrowth_at_a_bush_never_seen_grow() {
+        let food = |m: &Memory, p: Pos| m.predict(p)[kind(Cell::Food)];
+        let mut results = Vec::new();
+        for patterns in [false, true] {
+            let mut m = no_naps(patterns);
+            for i in 0..40 {
+                eat_and_watch(&mut m, Pos { x: 10 * i, y: 0 });
+                m.sleep();
+            }
+            // A new bush: eaten, then out of view for 40 steps.
+            let bush = Pos { x: 0, y: 20 };
+            let mut v = [Cell::Empty; VIEW * VIEW];
+            v[Observation::CENTER] = Cell::Food;
+            m.observe(&at(bush, v));
+            m.fed(bush);
+            v[Observation::CENTER] = Cell::Empty;
+            m.observe(&at(bush, v));
+            let away = Pos { x: 0, y: 30 };
+            for _ in 0..40 {
+                m.observe(&at(away, [Cell::Empty; VIEW * VIEW]));
+            }
+            results.push(food(&m, bush));
+        }
+        assert!(results[0] < 0.3, "without patterns: {}", results[0]);
+        assert!(results[1] > 0.8, "with patterns: {}", results[1]);
+    }
+
+    #[test]
+    fn patterns_learn_only_in_sleep() {
+        let mut m = no_naps(true);
+        m.recall.capacity = 100_000;
+        for i in 0..40 {
+            eat_and_watch(&mut m, Pos { x: 10 * i, y: 0 });
+        }
+        assert_eq!(m.patterns.predict(Last::Ate, 40), None);
+        m.sleep();
+        assert!(m.patterns.predict(Last::Ate, 40).is_some());
+    }
+
+    #[test]
+    fn a_switch_moves_what_was_seen_since_the_old_map_stopped_fitting() {
+        let mut m = memory();
+        live(&mut m, 3, 2_000);
+        let before = m.contexts[0].seen.len();
+        live(&mut m, 4, 2_000);
+        let since = m.lost_since;
+        let stale = |c: &Context| c.seen.values().filter(|s| s.sensed >= since).count();
+        assert_eq!(m.active(), 1);
+        assert_eq!(stale(&m.contexts[0]), 0, "world B's squares left in A");
+        assert!(!m.contexts[1].seen.is_empty() && before > 0);
     }
 
     #[test]
