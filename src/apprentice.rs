@@ -1,4 +1,4 @@
-//! Phase 2: the apprentice chooses its own actions.
+//! The apprentice chooses its own actions (phase 2 onward).
 //!
 //! Everything it acts on is learned from its own experience:
 //! - **where things are**: the phase 1 predictive-coding world model;
@@ -135,9 +135,10 @@ enum Tried {
     Rest,
 }
 
-/// The phase 2 learner: acts on its own learned model, valence and volatility.
-pub struct Apprentice {
-    model: PredictiveCoding,
+/// The learner: acts on its own learned model, valence and volatility.
+/// Phase 2 and 3 use [`PredictiveCoding`]; phase 4 a [`crate::memory::Memory`].
+pub struct Apprentice<M = PredictiveCoding> {
+    model: M,
     drives: Drives,
     rng: Rng,
     valence: Valence,
@@ -149,9 +150,17 @@ pub struct Apprentice {
 }
 
 impl Apprentice {
+    /// An apprentice with the phase 1 world model and no memory.
     pub fn new(drives: Drives, rates: Rates, seed: u64) -> Self {
+        Self::with_model(drives, PredictiveCoding::new(rates), seed)
+    }
+}
+
+impl<M: WorldModel> Apprentice<M> {
+    /// An apprentice that learns its world with `model`.
+    pub fn with_model(drives: Drives, model: M, seed: u64) -> Self {
         Self {
-            model: PredictiveCoding::new(rates),
+            model,
             drives,
             rng: Rng::new(seed),
             valence: Valence::new(drives.optimism),
@@ -161,6 +170,11 @@ impl Apprentice {
             pending: None,
             surprise: 0.0,
         }
+    }
+
+    /// Its world model.
+    pub fn model(&self) -> &M {
+        &self.model
     }
 
     /// Learned error per step away from a square.
@@ -297,7 +311,7 @@ impl Apprentice {
     }
 }
 
-impl Mind for Apprentice {
+impl<M: WorldModel> Mind for Apprentice<M> {
     fn act(&mut self, obs: &Observation) -> Action {
         self.t += 1;
         self.learn_volatility(obs);
@@ -308,6 +322,9 @@ impl Mind for Apprentice {
     }
 
     fn feel(&mut self, outcome: &Outcome) {
+        if outcome.slept {
+            self.model.sleep();
+        }
         let Some((tried, before)) = self.pending.take() else {
             return;
         };

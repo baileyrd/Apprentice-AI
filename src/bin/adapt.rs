@@ -1,4 +1,4 @@
-//! Adaptation experiment (phases 2 and 3): after walls or food move, across seeds and minds.
+//! Adaptation experiment (phases 2-4): after walls or food move, across seeds and minds.
 
 use std::fs;
 use std::path::PathBuf;
@@ -7,22 +7,25 @@ use std::process::ExitCode;
 use apprentice::adaptation::{self, Change, Recovery, Setup, Trace};
 use apprentice::agent::ReflexAgent;
 use apprentice::apprentice::{Apprentice, Drives, Watched};
+use apprentice::memory::{Memory, Recall};
 use apprentice::model::Rates;
 use apprentice::report::{self, Line};
+use apprentice::sim::Regrowth;
 use apprentice::sim::SimError;
 
 const USAGE: &str = "\
-usage: adapt [--change walls|food] [--seeds N] [--out DIR]
+usage: adapt [--change walls|food] [--bushes] [--seeds N] [--out DIR]
 
-Lives seeds 1..=N (default 10) with three minds: reflex (with a world model
-watching), drive-only apprentice and drive + curiosity apprentice. After the
-warm-up, half the walls move (default) or all the food moves. Prints
-adaptation times and writes DIR/adaptation.csv and DIR/adaptation.svg
-(default DIR: runs/<change>).";
+Lives seeds 1..=N (default 10) with four minds: reflex (with a world model
+watching), drive-only apprentice, drive + curiosity apprentice, and that
+apprentice with memory. After the warm-up, half the walls move (default) or
+all the food moves. --bushes makes food grow back in place (always so for
+food). Prints adaptation times and writes DIR/adaptation.csv and
+DIR/adaptation.svg (default DIR: runs/<change>).";
 
 type Error = Box<dyn std::error::Error>;
 
-const MINDS: [&str; 3] = ["reflex", "drive only", "drive + curiosity"];
+const MINDS: [&str; 4] = ["reflex", "drive only", "drive + curiosity", "+ memory"];
 /// Plotted window around the move, in steps, and the sampling stride.
 const WINDOW: (i64, i64) = (-500, 3000);
 const STRIDE: usize = 25;
@@ -38,19 +41,33 @@ fn live(mind: &str, setup: &Setup) -> Result<Trace, SimError> {
             };
             adaptation::run(setup, &mut Apprentice::new(drives, rates, seed))
         }
-        _ => adaptation::run(setup, &mut Apprentice::new(Drives::default(), rates, seed)),
+        "drive + curiosity" => {
+            adaptation::run(setup, &mut Apprentice::new(Drives::default(), rates, seed))
+        }
+        _ => {
+            let memory = Memory::new(rates, Recall::default());
+            adaptation::run(
+                setup,
+                &mut Apprentice::with_model(Drives::default(), memory, seed),
+            )
+        }
     }
 }
 
 struct Args {
     change: Change,
+    bushes: bool,
     seeds: u64,
     out: PathBuf,
 }
 
 fn parse(mut raw: impl Iterator<Item = String>) -> Result<Args, Error> {
-    let (mut change, mut seeds, mut out) = (Change::Walls, 10, None);
+    let (mut change, mut seeds, mut out, mut bushes) = (Change::Walls, 10, None, false);
     while let Some(flag) = raw.next() {
+        if flag == "--bushes" {
+            bushes = true;
+            continue;
+        }
         let mut value = || raw.next().ok_or_else(|| format!("{flag} needs a value"));
         match flag.as_str() {
             "--change" => {
@@ -71,7 +88,12 @@ fn parse(mut raw: impl Iterator<Item = String>) -> Result<Args, Error> {
         "food"
     };
     let out = out.unwrap_or_else(|| PathBuf::from("runs").join(name));
-    Ok(Args { change, seeds, out })
+    Ok(Args {
+        change,
+        bushes,
+        seeds,
+        out,
+    })
 }
 
 fn fmt_steps(steps: Option<usize>) -> String {
@@ -93,9 +115,18 @@ fn median(mut xs: Vec<f64>) -> f64 {
 
 fn execute(args: &Args) -> Result<(), Error> {
     let (seeds, out) = (args.seeds, &args.out);
-    let base = Setup::for_change(args.change);
+    let mut base = Setup::for_change(args.change);
+    if args.bushes {
+        base.config.regrowth = Regrowth::InPlace {
+            delay: adaptation::BUSH_DELAY,
+        };
+    }
     let horizon = base.after as f64;
-    println!("seed  {:>20}  {:>20}  {:>20}", MINDS[0], MINDS[1], MINDS[2]);
+    print!("seed");
+    for name in MINDS {
+        print!("  {name:>20}");
+    }
+    println!();
     let mut all: Vec<Vec<(Trace, Recovery)>> = vec![Vec::new(); MINDS.len()];
     for seed in 1..=seeds {
         let setup = Setup {

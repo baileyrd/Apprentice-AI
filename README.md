@@ -7,13 +7,14 @@ square with everything it has learned intact.
 
 Design sketch: <https://claude.ai/artifact/NGoii1LqBsYDEWPomT7mSQ>
 
-## Status: phase 3
+## Status: phase 4
 
 The world, the body, the yardstick, a world model that learns, an
-apprentice that chooses its own actions from drive and curiosity, and a
-replay dashboard that puts what it believes next to what is there.
+apprentice that chooses its own actions from drive and curiosity, a replay
+dashboard, and a memory: a diary replayed into per-world maps in sleep, with
+consolidation and decay.
 Results: [phase 1](docs/p1/README.md), [phase 2](docs/p2/README.md),
-[phase 3](docs/p3/README.md).
+[phase 3](docs/p3/README.md), [phase 4](docs/p4/README.md).
 
 | Module      | What it holds                                                   |
 |-------------|-----------------------------------------------------------------|
@@ -23,8 +24,10 @@ Results: [phase 1](docs/p1/README.md), [phase 2](docs/p2/README.md),
 | `agent`     | `Agent` port and two baselines: `random` and `reflex`           |
 | `metrics`   | Meals, sleeps, bumps, hurts, mean energy, mean time to food     |
 | `model`     | World models: two-layer predictive coding; backprop baseline    |
+| `memory`    | Diary over per-world maps; sleep replay, stiffening, decay      |
 | `apprentice`| The learner: learned valence and volatility, drive + curiosity  |
 | `adaptation`| Move half the walls or all the food, time the recovery          |
+| `relearn`   | World A, then B, then A again: does B erase A?                  |
 | `experiment`| Surprise-per-episode run and the pre-registered fallback rule   |
 | `report`    | CSV and SVG rendering of results                                |
 | `rng`       | SplitMix64, so checkpoints replay bit-for-bit                   |
@@ -52,7 +55,14 @@ cargo run --release --bin adapt -- --change food --out docs/p3
 ```
 
 Runs the adaptation experiments (walls move, or food moves) across 10 seeds
-and three minds.
+and four minds. `--bushes` makes food grow back in place for the wall test.
+
+```sh
+cargo run --release --bin relearn -- --out docs/p4
+```
+
+Runs the phase 4 test: world A, then B, then A again, with and without
+memory.
 
 ```sh
 cargo run --release --bin dashboard -- --out docs/p3/dashboard.html
@@ -66,6 +76,6 @@ map, surprise and energy, as the walls and then the food move.
 1. **P0** world, body, baselines, step log, checkpoints (done)
 2. **P1** predictive-coding world model; surprise curve (done)
 3. **P2** action from homeostatic drive + curiosity (done)
-4. **P3** dashboard (believed vs real map) and food-move adaptation (this)
-5. **P4** episodic diary, sleep replay, consolidation and decay
+4. **P3** dashboard (believed vs real map) and food-move adaptation (done)
+5. **P4** episodic diary, sleep replay, consolidation and decay (this)
 6. Later: mentor, language, multiple apprentices
