@@ -23,12 +23,13 @@ use apprentice::sim::{Config, Event, Regrowth, Sim, SimError};
 use apprentice::world::{Cell, Pos};
 
 const USAGE: &str = "\
-usage: foretell [--seeds N] [--from SEED] [--out DIR]
+usage: foretell [--seeds N] [--from SEED] [--world-steps S] [--out DIR]
 
 Seeds FROM..FROM+N-1 (default 1..10). Raises apprentices with no mentor, a
 true foretelling mentor and a random one; prints what its words came to mean,
 futile returns in a new barren world and sleeps in a new bush world; writes
-DIR/foretell.csv (default DIR: runs/foretell).";
+DIR/foretell.csv (default DIR: runs/foretell). Each upbringing world lasts S
+steps (default 1,000).";
 
 type Error = Box<dyn std::error::Error>;
 type Learner = Apprentice<Memory>;
@@ -39,7 +40,6 @@ const MINDS: [(&str, Foretell); 3] = [
     ("random mentor", Foretell::AtRandom),
 ];
 const UPBRINGING: u64 = 4;
-const WORLD_STEPS: usize = 1_000;
 const BARREN_STEPS: usize = 2_000;
 const BUSH_STEPS: usize = 4_000;
 const WINDOW: usize = 1_000;
@@ -95,7 +95,7 @@ impl Life {
 
     /// The upbringing: bush and barren worlds in turn, ending in the kind
     /// unlike `next`, so what it last learned is wrong there.
-    fn raised(how: Foretell, seed: u64, next: &Config) -> Result<Self, SimError> {
+    fn raised(how: Foretell, seed: u64, next: &Config, steps: usize) -> Result<Self, SimError> {
         let mut life = Self::new(how, seed);
         let last = if next.regrowth == Regrowth::Anywhere {
             bushes()
@@ -113,7 +113,7 @@ impl Life {
             } else {
                 other.clone()
             };
-            life.live(config, seed + 100 * i, WORLD_STEPS)?;
+            life.live(config, seed + 100 * i, steps)?;
         }
         Ok(life)
     }
@@ -193,12 +193,12 @@ struct Outcome {
 
 /// Raises the mind twice, once for each test, each upbringing ending in the
 /// other kind of world.
-fn run(how: Foretell, seed: u64) -> Result<Outcome, SimError> {
-    let mut life = Life::raised(how, seed, &bushes())?;
+fn run(how: Foretell, seed: u64, steps: usize) -> Result<Outcome, SimError> {
+    let mut life = Life::raised(how, seed, &bushes(), steps)?;
     let (grows_back, stays_gone) = (life.meaning(GROWS_BACK), life.meaning(STAYS_GONE));
     let general = life.expected();
     let bush = life.live(bushes(), seed + 6_000, BUSH_STEPS)?;
-    let barren = Life::raised(how, seed, &barren())?.live(barren(), seed + 5_000, BARREN_STEPS)?;
+    let barren = Life::raised(how, seed, &barren(), steps)?.live(barren(), seed + 5_000, BARREN_STEPS)?;
     Ok(Outcome {
         general,
         grows_back,
@@ -218,9 +218,18 @@ fn median(mut xs: Vec<f64>) -> f64 {
     }
 }
 
-/// Parsed flags: seed count, first seed, output directory.
-fn parse(args: &[String]) -> Result<(u64, u64, PathBuf), String> {
+/// Parsed flags.
+struct Args {
+    seeds: u64,
+    from: u64,
+    out: PathBuf,
+    /// Steps in each upbringing world.
+    world_steps: usize,
+}
+
+fn parse(args: &[String]) -> Result<Args, String> {
     let (mut seeds, mut from, mut out) = (10, 1, PathBuf::from("runs/foretell"));
+    let mut world_steps = 1_000;
     let mut it = args.iter();
     while let Some(flag) = it.next() {
         let value = it.next().ok_or(format!("{flag} needs a value"))?;
@@ -228,6 +237,7 @@ fn parse(args: &[String]) -> Result<(u64, u64, PathBuf), String> {
         match flag.as_str() {
             "--seeds" => seeds = number()?,
             "--from" => from = number()?,
+            "--world-steps" => world_steps = number()? as usize,
             "--out" => out = PathBuf::from(value),
             _ => return Err(format!("unknown flag: {flag}")),
         }
@@ -235,21 +245,32 @@ fn parse(args: &[String]) -> Result<(u64, u64, PathBuf), String> {
     if seeds == 0 {
         return Err("--seeds must be positive".into());
     }
-    Ok((seeds, from, out))
+    Ok(Args {
+        seeds,
+        from,
+        out,
+        world_steps,
+    })
 }
 
 fn show(x: Option<f64>) -> String {
     x.map_or(String::new(), |v| format!("{v:.3}"))
 }
 
-fn execute(seeds: u64, from: u64, out: &PathBuf) -> Result<(), Error> {
+fn execute(args: &Args) -> Result<(), Error> {
+    let Args {
+        seeds,
+        from,
+        ref out,
+        world_steps,
+    } = *args;
     let mut csv = String::from(
         "mind,seed,general,grows_back,stays_gone,barren_futile,barren_hopes,barren_sleeps,barren_meals,bush_futile,bush_hopes,bush_sleeps,bush_meals\n",
     );
     for (name, how) in MINDS {
         let mut results = Vec::new();
         for seed in from..from + seeds {
-            let r = run(how, seed)?;
+            let r = run(how, seed, world_steps)?;
             csv.push_str(&format!(
                 "{name},{seed},{},{},{},{},{},{},{},{},{},{},{}\n",
                 show(r.general),
@@ -297,14 +318,14 @@ fn main() -> ExitCode {
         println!("{USAGE}");
         return ExitCode::SUCCESS;
     }
-    let (seeds, from, out) = match parse(&args) {
+    let args = match parse(&args) {
         Ok(parsed) => parsed,
         Err(e) => {
             eprintln!("{e}\n\n{USAGE}");
             return ExitCode::from(2);
         }
     };
-    if let Err(e) = execute(seeds, from, &out) {
+    if let Err(e) = execute(&args) {
         eprintln!("foretell: {e}");
         return ExitCode::FAILURE;
     }

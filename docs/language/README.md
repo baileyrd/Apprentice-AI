@@ -140,3 +140,29 @@ bush columns are 4,000 steps.
 - **Earlier results shift slightly.** Hint and naming words now also teach
   word patterns. On seeds 1–10 the mentor experiment moves by at most 1.5
   sleeps over steps 1–4,000 (blind mentor 8 → 9.5).
+
+## Is the upbringing too short?
+
+Nano's question after the run: the home test needed 3,000 steps to learn one
+world, so are 1,000 steps per world enough here? Same seeds 1–10, each
+upbringing world lasting 1,000, 3,000 or 9,000 steps (4,000, 12,000 or
+36,000 steps in all). This was run after the results above, so it is a
+check, not a judged run.
+
+| Steps per world | Words learned | Barren false hopes, none / true | Barren futile returns, none / true / random | Bush sleeps, none / true / random |
+|--:|--:|--:|--:|--:|
+| 1,000 | 7/10 | 27.5 / 0 | 29 / 31 / 38.5 | 8.5 / 5 / 11.5 |
+| 3,000 | 8/10 | 43.5 / 0 | 24.5 / 16 / 17 | 11.5 / 3 / 22 |
+| 9,000 | 8/10 | 39 / 0 | 13.5 / 18.5 / 19 | 10 / 2.5 / 11.5 |
+
+More time sharpens the gain where the words work: the bush-world benefit
+grows from −41% to −75%, and false hopes stay at 0. It does not fix the
+misses. "Grows back" stays near 0.5 in two seeds even after 36,000 steps,
+futile returns swing both ways with no trend, and the random mentor still
+does harm. Those come from how the world and patterns work (idle eating
+costs the same as resting; a bush doesn't regrow under it; an unchanged
+square is sampled on every sighting), not from too little learning.
+
+```sh
+cargo run --release --bin foretell -- --world-steps 9000 --out runs/foretell-9k
+```
