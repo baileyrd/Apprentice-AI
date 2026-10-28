@@ -108,6 +108,19 @@ struct Seen {
     sensed: u64,
 }
 
+/// Where a belief about a square comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Source {
+    /// A pattern: how squares like it change (a bush grows back).
+    Pattern,
+    /// The diary: seen since it last slept.
+    Diary,
+    /// The map in use: consolidated in sleep.
+    Map,
+    /// Never seen: the map's general expectation.
+    Unknown,
+}
+
 /// A sighting in the diary, with the square's state and that state's age
 /// just before it.
 type Sighting = (Pos, Cell, Option<(Last, u64)>);
@@ -218,6 +231,55 @@ impl Memory {
     /// How many maps it has made.
     pub fn contexts(&self) -> usize {
         self.contexts.len()
+    }
+
+    /// What it believes at `at`, and where that belief comes from.
+    pub fn explain(&self, at: Pos) -> (Belief, Source) {
+        if let Some(b) = self.anticipate(at) {
+            return (b, Source::Pattern);
+        }
+        if let Some(b) = self.fast.get(&at) {
+            return (*b, Source::Diary);
+        }
+        let map = &self.contexts[self.active].map;
+        let source = if map.knows(at) {
+            Source::Map
+        } else {
+            Source::Unknown
+        };
+        (map.predict(at), source)
+    }
+
+    /// What map `i` alone holds about `at`; `None` if it never learned it.
+    pub fn recalls(&self, i: usize, at: Pos) -> Option<Belief> {
+        let map = &self.contexts.get(i)?.map;
+        map.knows(at).then(|| map.predict(at))
+    }
+
+    /// Each map's running error on what is sensed now; `None` while it rests
+    /// on too few sightings to count.
+    pub fn fits(&self) -> Vec<Option<f64>> {
+        let settle = self.recall.settle;
+        self.contexts
+            .iter()
+            .map(|c| (c.samples >= settle).then_some(c.fit))
+            .collect()
+    }
+
+    /// Doubt held now, and the doubt at which it starts a new map.
+    pub fn doubt(&self) -> (usize, usize) {
+        (self.lost, self.recall.settle)
+    }
+
+    /// Sightings held in the diary, not yet written into any map, because
+    /// they were made in doubt.
+    pub fn held(&self) -> usize {
+        self.diary.len() - self.settled().0
+    }
+
+    /// How it consolidates, forgets and recognises contexts.
+    pub fn recall(&self) -> Recall {
+        self.recall
     }
 
     /// Replays the diary into the active map, stiffens what it confirmed,
@@ -385,13 +447,7 @@ impl WorldModel for Memory {
     }
 
     fn predict(&self, at: Pos) -> Belief {
-        if let Some(b) = self.anticipate(at) {
-            return b;
-        }
-        match self.fast.get(&at) {
-            Some(b) => *b,
-            None => self.contexts[self.active].map.predict(at),
-        }
+        self.explain(at).0
     }
 
     fn believes(&self, at: Pos) -> Option<Cell> {
@@ -734,5 +790,23 @@ mod tests {
         }
         assert!(rises[0] > 0.02, "without patterns: {}", rises[0]);
         assert!(rises[1] < 0.01, "with patterns: {}", rises[1]);
+    }
+
+    #[test]
+    fn it_can_say_where_a_belief_comes_from() {
+        let mut m = no_naps(false);
+        let nw = Pos { x: -1, y: -1 };
+        assert_eq!(m.explain(nw).1, Source::Unknown);
+        m.observe(&at(ORIGIN, corner()));
+        assert_eq!(m.explain(nw).1, Source::Diary);
+        m.sleep();
+        let (belief, source) = m.explain(nw);
+        assert_eq!(source, Source::Map);
+        assert_eq!(most_likely(&belief), Some(Cell::Wall));
+        assert_eq!(
+            m.recalls(0, nw).map(|b| most_likely(&b)),
+            Some(Some(Cell::Wall))
+        );
+        assert_eq!(m.recalls(1, nw), None);
     }
 }

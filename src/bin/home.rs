@@ -10,13 +10,9 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use apprentice::adaptation::BUSH_DELAY;
-use apprentice::apprentice::{Apprentice, Drives, Mind};
-use apprentice::memory::{Memory, Recall};
-use apprentice::model::Rates;
-use apprentice::rng::Rng;
-use apprentice::sim::{Config, Regrowth, Sim, SimError};
-use apprentice::world::{Grid, Layout};
+use apprentice::apprentice::Mind;
+use apprentice::home::{Place, at_home, step, world};
+use apprentice::sim::SimError;
 
 const USAGE: &str = "\
 usage: home [--seeds N] [--from SEED] [--out DIR]
@@ -26,36 +22,12 @@ yes at home, no to a stranger, and yes to home with a wall moved, after 100
 and 300 steps, and writes DIR/home.csv (default DIR: runs/home).";
 
 type Error = Box<dyn std::error::Error>;
-type Learner = Apprentice<Memory>;
 
-const HOME_STEPS: usize = 3_000;
 const TRIAL_STEPS: usize = 300;
 /// Steps into a trial at which the answer is judged, and a later look.
 const ASKED: usize = 100;
 const LATER: usize = 300;
 const STRANGERS: u64 = 3;
-
-/// What a trial puts it in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Place {
-    Home,
-    Changed,
-    Stranger(u64),
-}
-
-impl Place {
-    fn is_home(self) -> bool {
-        !matches!(self, Place::Stranger(_))
-    }
-
-    fn name(self) -> &'static str {
-        match self {
-            Place::Home => "home",
-            Place::Changed => "changed home",
-            Place::Stranger(_) => "stranger",
-        }
-    }
-}
 
 /// How one trial went.
 struct Trial {
@@ -76,54 +48,6 @@ impl Trial {
     /// Steps until it first said no; `None` if it never did.
     fn first_no(&self) -> Option<usize> {
         self.answers.iter().position(|&yes| !yes).map(|i| i + 1)
-    }
-}
-
-fn config() -> Config {
-    Config {
-        layout: Layout {
-            width: 6,
-            height: 6,
-            wall_density: 0.12,
-            hazard_density: 0.05,
-            food_count: 3,
-        },
-        regrowth: Regrowth::InPlace { delay: BUSH_DELAY },
-        ..Config::default()
-    }
-}
-
-fn step(sim: &mut Sim, mind: &mut Learner) {
-    let outcome = sim.step(mind.act(&sim.observe()));
-    mind.feel(&outcome);
-}
-
-/// A life at home: the mind, the home as it left it, and its home map.
-fn at_home(seed: u64) -> Result<(Learner, Sim, Option<usize>), SimError> {
-    let memory = Memory::new(Rates::default(), Recall::default());
-    let mut mind = Apprentice::with_model(Drives::default(), memory, seed);
-    let mut sim = Sim::new(config(), seed)?;
-    for _ in 0..HOME_STEPS {
-        step(&mut sim, &mut mind);
-    }
-    let home_map = mind.map_in_use();
-    Ok((mind, sim, home_map))
-}
-
-/// The world a trial puts it in; strangers wake it on home's wake square.
-fn world(place: Place, home: &Sim, seed: u64) -> Sim {
-    match place {
-        Place::Home => home.clone(),
-        Place::Changed => {
-            let mut changed = home.clone();
-            changed.move_walls(1);
-            changed
-        }
-        Place::Stranger(k) => {
-            let mut rng = Rng::new(seed * 100 + k + 1);
-            let grid = Grid::generate(&config().layout, &mut rng);
-            Sim::with_start(config(), grid, home.start(), rng)
-        }
     }
 }
 
@@ -250,13 +174,5 @@ mod tests {
         };
         assert!(!t.right(2) && t.right(3));
         assert_eq!(t.first_no(), Some(3));
-    }
-
-    #[test]
-    fn a_stranger_wakes_it_on_homes_wake_square() {
-        let home = Sim::new(config(), 1).expect("room");
-        let stranger = world(Place::Stranger(0), &home, 1);
-        assert_eq!(stranger.start(), home.start());
-        assert_ne!(stranger.grid(), home.grid());
     }
 }

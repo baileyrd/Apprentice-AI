@@ -1,0 +1,367 @@
+<meta charset="utf-8">
+<title>Apprentice Home Mind</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: instrument panel, as in the replay. Trial picker, the verdict readouts, three maps side by side (world, belief, home map), then one timeline of fit and doubt. */
+:root {
+  --bg: #f3f5f7;
+  --panel: #ffffff;
+  --ink: #18212b;
+  --muted: #5b6875;
+  --rule: #d9dfe5;
+  --floor: #e9edf1;
+  --wall: #2c3742;
+  --food: #1baf7a;
+  --hazard: #eb6834;
+  --unknown: #c3cad1;
+  --accent: #2a78d6;
+  --pattern: #8a52d1;
+  --wrong: #d03b52;
+  --yes: #1f9a66;
+  --no: #c7473b;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161c; --panel: #19212a; --ink: #e4e9ee; --muted: #93a0ad; --rule: #2b3642;
+    --floor: #222c36; --wall: #8796a5; --food: #2fc78f; --hazard: #f07a4b; --unknown: #39444f;
+    --accent: #5b9cf0; --pattern: #b388f0; --wrong: #f0627a; --yes: #3cc48a; --no: #ef6f63; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161c; --panel: #19212a; --ink: #e4e9ee; --muted: #93a0ad; --rule: #2b3642;
+  --floor: #222c36; --wall: #8796a5; --food: #2fc78f; --hazard: #f07a4b; --unknown: #39444f;
+  --accent: #5b9cf0; --pattern: #b388f0; --wrong: #f0627a; --yes: #3cc48a; --no: #ef6f63; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font: 15px/1.5 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 40px;
+}
+main { max-width: 1080px; margin: 0 auto; display: grid; gap: 20px; }
+h1 { font: 600 clamp(26px, 4vw, 34px)/1.1 var(--display); margin: 0; text-wrap: balance; }
+h2 { font: 600 13px/1.2 var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.lede { color: var(--muted); max-width: 68ch; margin: 6px 0 0; }
+.trials { display: flex; flex-wrap: wrap; gap: 8px; }
+.trials button { display: flex; align-items: center; gap: 8px; }
+.trials button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.pill { font: 600 11px/1 var(--body); letter-spacing: .05em; text-transform: uppercase; padding: 4px 6px; border-radius: 4px; color: var(--panel); }
+.pill.right { background: var(--yes); }
+.pill.wrong { background: var(--no); }
+.readouts { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.readout { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 10px 14px; display: grid; gap: 4px; align-content: start; }
+.readout b { font: 500 22px/1.2 var(--mono); font-variant-numeric: tabular-nums; }
+.readout span { font-size: 12px; color: var(--muted); letter-spacing: .03em; }
+.readout b.yes { color: var(--yes); }
+.readout b.no { color: var(--no); }
+.meter { height: 6px; background: var(--floor); border-radius: 3px; overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--hazard); width: 0; }
+.maps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+figure { margin: 0; display: grid; gap: 8px; min-width: 0; align-content: start; }
+canvas { display: block; width: 100%; max-width: 100%; }
+.map { aspect-ratio: 1; background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; }
+figcaption { font-size: 13px; color: var(--muted); }
+figcaption strong { color: var(--ink); font-weight: 600; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+button, select {
+  font: 500 14px var(--body); color: var(--ink); background: var(--panel);
+  border: 1px solid var(--rule); border-radius: 6px; padding: 6px 12px; cursor: pointer;
+}
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); min-width: 84px; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#scrub { flex: 1 1 220px; accent-color: var(--accent); }
+#clock { font: 500 14px var(--mono); font-variant-numeric: tabular-nums; min-width: 13ch; }
+.chart { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; height: 260px; cursor: crosshair; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); margin: 0; padding: 0; list-style: none; }
+.legend li { display: flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 2px; display: inline-block; flex: none; }
+.sw.line { height: 3px; }
+.sw.dash { height: 0; border-top: 2px dashed var(--muted); }
+.sw.ring { background: transparent; border: 2px solid var(--wrong); }
+.sw.tag { clip-path: polygon(0 0, 100% 0, 0 100%); }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 24px; }
+.notes p { color: var(--muted); font-size: 14px; margin: 0; max-width: 65ch; }
+.notes strong { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+
+<main>
+  <header>
+    <h1>What it knows about home</h1>
+    <p class="lede" id="lede">The apprentice lived 3,000 steps in a small world, its home. Then it was put somewhere and never told where. Each trial replays its last 150 steps at home and its first 300 in the new place. Watch what it believes, where each belief comes from, and how well its home map fits what it sees.</p>
+  </header>
+
+  <section aria-label="Trials" class="trials" id="trials"></section>
+
+  <section class="readouts" aria-live="polite">
+    <div class="readout"><span>Is this home? (its answer)</span><b id="answer">–</b></div>
+    <div class="readout"><span>Map in use</span><b id="map">–</b></div>
+    <div class="readout"><span>Doubt (a new map at full)</span><b id="doubt">–</b><div class="meter"><i id="doubtbar"></i></div></div>
+    <div class="readout"><span>Sightings held back in doubt</span><b id="held">–</b></div>
+  </section>
+
+  <div class="controls">
+    <button class="primary" id="play" type="button">Play</button>
+    <select id="speed" aria-label="Speed">
+      <option value="4">Slow</option>
+      <option value="12" selected>Normal</option>
+      <option value="40">Fast</option>
+    </select>
+    <input id="scrub" type="range" min="0" max="0" value="0" aria-label="Step">
+    <span id="clock">–</span>
+  </div>
+
+  <section class="maps">
+    <figure>
+      <canvas class="map" id="real" width="480" height="480"></canvas>
+      <figcaption><strong>The world.</strong> What is really there. The box is what it can see.</figcaption>
+    </figure>
+    <figure>
+      <canvas class="map" id="belief" width="480" height="480"></canvas>
+      <figcaption><strong>What it believes now.</strong> Paler means less sure. The corner tag says how it knows.</figcaption>
+    </figure>
+    <figure>
+      <canvas class="map" id="home" width="480" height="480"></canvas>
+      <figcaption><strong>Its home map.</strong> What its long memory of home holds. A red ring is a square in view that home's map gets wrong.</figcaption>
+    </figure>
+  </section>
+
+  <ul class="legend">
+    <li><span class="sw" style="background:var(--floor)"></span>open</li>
+    <li><span class="sw" style="background:var(--wall)"></span>wall</li>
+    <li><span class="sw" style="background:var(--food)"></span>bush</li>
+    <li><span class="sw" style="background:var(--hazard)"></span>hazard</li>
+    <li><span class="sw" style="background:var(--unknown)"></span>never seen</li>
+    <li><span class="sw tag" style="background:var(--accent)"></span>seen today (diary)</li>
+    <li><span class="sw tag" style="background:var(--pattern)"></span>pattern: how such squares behave</li>
+    <li><span class="sw tag" style="background:var(--muted)"></span>long memory (map)</li>
+    <li><span class="sw ring"></span>home map wrong here</li>
+  </ul>
+
+  <section>
+    <h2>When it knows: how well each map fits</h2>
+    <canvas class="chart" id="chart" width="1040" height="260" aria-label="Running error of each map, doubt and its answer over time"></canvas>
+  </section>
+  <ul class="legend">
+    <li><span class="sw line" style="background:var(--accent)"></span>home map's error</li>
+    <li><span class="sw line" style="background:var(--muted)"></span>other maps' error</li>
+    <li><span class="sw dash"></span>misfit line</li>
+    <li><span class="sw" style="background:var(--hazard);opacity:.35"></span>doubt</li>
+    <li><span class="sw" style="background:var(--yes)"></span><span class="sw" style="background:var(--no)"></span>answer: home / not home</li>
+  </ul>
+
+  <section class="notes">
+    <p><strong>What it knows.</strong> Each square's belief comes from one of three places. Patterns come first: how squares like this one behave over time, such as a bush it ate from growing back, or open ground staying open. Next is its diary of what it saw since it last slept. Last is the map in use, its long memory, written only in sleep.</p>
+    <p><strong>When it knows.</strong> Each map is scored on what it sees, square by square. When the map in use scores above the misfit line, doubt builds. When it fits again, doubt drains. Full doubt starts a new map. An old map that fits clearly better is taken back.</p>
+    <p><strong>How it answers.</strong> "Home" means the map it chose is the one it used at home. It is never told where it is. While in doubt it holds what it sees back from home's map, so a strange place is not learned into home.</p>
+  </section>
+</main>
+
+<script>
+const REPLAY = /*REPLAY*/null;
+const $ = (id) => document.getElementById(id);
+const KIND = { ".": "--floor", "#": "--wall", "*": "--food", "^": "--hazard", "?": "--unknown" };
+const SOURCE = { d: "--accent", p: "--pattern", m: "--muted" };
+let colors = {};
+function readColors() {
+  const cs = getComputedStyle(document.documentElement);
+  for (const k of ["--floor","--wall","--food","--hazard","--unknown","--accent","--pattern","--muted","--wrong","--ink","--rule","--panel","--yes","--no"]) colors[k] = cs.getPropertyValue(k).trim();
+}
+let trial = 0, t = 0, playing = false, last = 0;
+const steps = () => REPLAY.trials[trial].steps;
+
+function fitCanvas(c) {
+  const r = c.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(r.width * d)), h = Math.max(1, Math.round(r.height * d));
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  return c.getContext("2d");
+}
+
+function grid(canvas, glyphs, alpha, tags, rings, s) {
+  const ctx = fitCanvas(canvas), W = REPLAY.width, H = REPLAY.height;
+  const cell = Math.min(canvas.width / W, canvas.height / H), gap = Math.max(1, cell * 0.06);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x, g = glyphs[i];
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = colors["--floor"];
+    ctx.fillRect(x * cell + gap, y * cell + gap, cell - 2 * gap, cell - 2 * gap);
+    ctx.globalAlpha = alpha ? 0.25 + 0.75 * (+alpha[i] / 9) : 1;
+    ctx.fillStyle = colors[KIND[g]];
+    ctx.fillRect(x * cell + gap, y * cell + gap, cell - 2 * gap, cell - 2 * gap);
+    ctx.globalAlpha = 1;
+    if (tags && SOURCE[tags[i]]) {
+      ctx.fillStyle = colors[SOURCE[tags[i]]];
+      const k = cell * 0.32;
+      ctx.beginPath();
+      ctx.moveTo(x * cell + gap, y * cell + gap);
+      ctx.lineTo(x * cell + gap + k, y * cell + gap);
+      ctx.lineTo(x * cell + gap, y * cell + gap + k);
+      ctx.fill();
+    }
+    if (rings && rings[i]) {
+      ctx.strokeStyle = colors["--wrong"];
+      ctx.lineWidth = Math.max(2, cell * 0.08);
+      ctx.strokeRect(x * cell + gap * 2, y * cell + gap * 2, cell - 4 * gap, cell - 4 * gap);
+    }
+  }
+  // The apprentice and its view, in grid-plus-border coordinates.
+  const px = s.x + 1, py = s.y + 1;
+  ctx.strokeStyle = colors["--ink"];
+  ctx.lineWidth = Math.max(1.5, cell * 0.04);
+  ctx.setLineDash([cell * 0.12, cell * 0.08]);
+  ctx.strokeRect((px - 1) * cell + 1, (py - 1) * cell + 1, 3 * cell - 2, 3 * cell - 2);
+  ctx.setLineDash([]);
+  ctx.fillStyle = colors["--ink"];
+  ctx.beginPath();
+  ctx.arc((px + 0.5) * cell, (py + 0.5) * cell, cell * 0.2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function wrongInView(s) {
+  const W = REPLAY.width, out = new Array(s.real.length).fill(false);
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const x = s.x + 1 + dx, y = s.y + 1 + dy, i = y * W + x;
+    if (i < 0 || i >= s.real.length) continue;
+    const h = s.home[i];
+    if (h === "?") continue;
+    // A bush the apprentice ate from reads open until it grows back.
+    const same = h === s.real[i] || (h === "*" && s.real[i] === ".");
+    out[i] = !same;
+  }
+  return out;
+}
+
+function chart() {
+  const c = $("chart"), ctx = fitCanvas(c), d = window.devicePixelRatio || 1;
+  const S = steps(), n = S.length, W = c.width, H = c.height;
+  const pad = { l: 44 * d, r: 12 * d, t: 12 * d, b: 46 * d };
+  const top = 0.9, x = (i) => pad.l + (i / (n - 1)) * (W - pad.l - pad.r);
+  const plotH = H - pad.t - pad.b, y = (v) => pad.t + plotH * (1 - Math.min(v, top) / top);
+  ctx.clearRect(0, 0, W, H);
+  ctx.font = `${11 * d}px ${getComputedStyle(document.body).fontFamily}`;
+  ctx.fillStyle = colors["--muted"]; ctx.strokeStyle = colors["--rule"]; ctx.lineWidth = 1;
+  for (const v of [0, 0.3, 0.6, 0.9]) {
+    ctx.beginPath(); ctx.moveTo(pad.l, y(v)); ctx.lineTo(W - pad.r, y(v)); ctx.stroke();
+    ctx.fillText(v.toFixed(1), 6 * d, y(v) + 4 * d);
+  }
+  // Doubt, as a shaded area from the bottom of the plot.
+  ctx.fillStyle = colors["--hazard"]; ctx.globalAlpha = 0.18;
+  ctx.beginPath(); ctx.moveTo(x(0), y(0));
+  S.forEach((s, i) => ctx.lineTo(x(i), y(top * Math.min(1, s.doubt / REPLAY.settle))));
+  ctx.lineTo(x(n - 1), y(0)); ctx.fill(); ctx.globalAlpha = 1;
+  // Misfit line.
+  ctx.strokeStyle = colors["--muted"]; ctx.setLineDash([5 * d, 4 * d]);
+  ctx.beginPath(); ctx.moveTo(pad.l, y(REPLAY.misfit / 1e4)); ctx.lineTo(W - pad.r, y(REPLAY.misfit / 1e4)); ctx.stroke();
+  ctx.setLineDash([]);
+  // Each map's running error.
+  const maps = Math.max(...S.map((s) => s.fits.length));
+  for (let m = 0; m < maps; m++) {
+    const home = m === REPLAY.home_map;
+    ctx.strokeStyle = colors[home ? "--accent" : "--muted"];
+    ctx.lineWidth = (home ? 2.4 : 1.2) * d; ctx.globalAlpha = home ? 1 : 0.7;
+    ctx.beginPath(); let on = false;
+    S.forEach((s, i) => {
+      const f = s.fits[m];
+      if (f == null) { on = false; return; }
+      on ? ctx.lineTo(x(i), y(f / 1e4)) : ctx.moveTo(x(i), y(f / 1e4)); on = true;
+    });
+    ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  // Answer strip.
+  const sy = H - pad.b + 10 * d, sh = 8 * d;
+  S.forEach((s, i) => { ctx.fillStyle = colors[s.home_answer ? "--yes" : "--no"]; ctx.fillRect(x(i), sy, Math.ceil(x(1) - x(0)) + 1, sh); });
+  ctx.fillStyle = colors["--muted"];
+  ctx.fillText("answer", 2 * d, sy + sh);
+  // Trial start and the cursor.
+  const ta = x(REPLAY.trial_at);
+  ctx.strokeStyle = colors["--ink"]; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(ta, pad.t); ctx.lineTo(ta, sy + sh); ctx.stroke();
+  ctx.fillStyle = colors["--ink"];
+  ctx.fillText("at home", pad.l + 4 * d, H - 8 * d);
+  ctx.fillText("put in the trial world", ta + 4 * d, H - 8 * d);
+  ctx.strokeStyle = colors["--accent"]; ctx.lineWidth = 1.5 * d;
+  ctx.beginPath(); ctx.moveTo(x(t), pad.t); ctx.lineTo(x(t), sy + sh); ctx.stroke();
+}
+
+function render() {
+  const S = steps(), s = S[t];
+  grid($("real"), s.real, null, null, null, s);
+  grid($("belief"), s.believed, s.sure, s.source, null, s);
+  grid($("home"), s.home, s.home_sure, null, wrongInView(s), s);
+  const a = $("answer");
+  a.textContent = s.home_answer ? "Yes, home" : "No";
+  a.className = s.home_answer ? "yes" : "no";
+  const isHomeMap = s.map === REPLAY.home_map;
+  $("map").textContent = `#${s.map + 1} ${isHomeMap ? "(home)" : "(another)"}`;
+  $("doubt").textContent = `${Math.round(100 * Math.min(1, s.doubt / REPLAY.settle))}%`;
+  $("doubtbar").style.width = `${Math.min(100, (100 * s.doubt) / REPLAY.settle)}%`;
+  $("held").textContent = s.held;
+  const rel = t - REPLAY.trial_at;
+  $("clock").textContent = rel < 0 ? `home ${rel + 1}` : `trial +${rel + 1}`;
+  $("scrub").value = t;
+  chart();
+}
+
+function pick(i) {
+  trial = i;
+  document.querySelectorAll("#trials button").forEach((b, j) => b.setAttribute("aria-pressed", String(j === i)));
+  $("scrub").max = steps().length - 1;
+  t = Math.min(t, steps().length - 1);
+  render();
+}
+
+function buildTrials() {
+  const box = $("trials");
+  REPLAY.trials.forEach((tr, i) => {
+    const asked = tr.steps[Math.min(tr.steps.length - 1, REPLAY.trial_at + 99)];
+    const right = asked.home_answer === tr.is_home;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.innerHTML = `<span>${tr.name}</span><span class="pill ${right ? "right" : "wrong"}">${asked.home_answer ? "said home" : "said not home"}</span>`;
+    b.title = right ? "Right after 100 steps" : "Wrong after 100 steps";
+    b.addEventListener("click", () => pick(i));
+    box.appendChild(b);
+  });
+}
+
+function frame(now) {
+  if (!playing) return;
+  const per = 1000 / +$("speed").value;
+  if (now - last >= per) {
+    last = now;
+    if (t >= steps().length - 1) { toggle(false); return; }
+    t++; render();
+  }
+  requestAnimationFrame(frame);
+}
+function toggle(on) {
+  playing = on ?? !playing;
+  $("play").textContent = playing ? "Pause" : "Play";
+  if (playing) { if (t >= steps().length - 1) t = 0; requestAnimationFrame(frame); }
+}
+
+$("play").addEventListener("click", () => toggle());
+$("scrub").addEventListener("input", (e) => { t = +e.target.value; render(); });
+$("chart").addEventListener("click", (e) => {
+  const r = e.currentTarget.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+  const l = 44, rr = 12, f = (e.clientX - r.left - l) / (r.width - l - rr);
+  t = Math.max(0, Math.min(steps().length - 1, Math.round(f * (steps().length - 1))));
+  render();
+});
+window.addEventListener("resize", render);
+const mq = window.matchMedia("(prefers-color-scheme: dark)");
+mq.addEventListener?.("change", () => { readColors(); render(); });
+new MutationObserver(() => { readColors(); render(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+readColors();
+buildTrials();
+t = REPLAY.trial_at + 40;
+pick(REPLAY.trials.length > 2 ? 2 : 0);
+</script>

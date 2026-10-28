@@ -8,6 +8,7 @@ pub mod agent;
 pub mod apprentice;
 pub mod body;
 pub mod experiment;
+pub mod home;
 pub mod lessons;
 pub mod memory;
 pub mod mentor;

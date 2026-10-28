@@ -114,6 +114,14 @@ cargo run --release --bin home -- --out docs/home
 Lives in a small home world, then is put in home, home with a wall moved, or
 a stranger, and asked "is this home?" ([docs/home](docs/home/README.md)).
 
+```sh
+cargo run --release --bin mind -- --out docs/home/mind.html
+```
+
+Replays the home trials step by step: what it believes about each square and
+how it knows it (pattern, diary or map), what its home map holds, each map's
+fit, its doubt and its answer ([docs/home/mind.html](docs/home/mind.html)).
+
 The A/B/A test also counts mix-ups: steps in world B spent on A's map
 ([docs/recognition](docs/recognition/README.md)).
 
