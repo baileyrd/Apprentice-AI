@@ -55,6 +55,11 @@ impl Observation {
     }
 }
 
+/// A sound the mentor makes about a square. It means nothing until the
+/// apprentice links it to what it sees there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Word(pub u8);
+
 /// What the agent can do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Action {

@@ -1,0 +1,31 @@
+mind,seed,exam_sleeps,exam_meals,exam_hurts,school_steps,lessons_mastered
+no schooling,1,94,115,28,0,0
+no schooling,2,111,109,98,0,0
+no schooling,3,88,141,53,0,0
+no schooling,4,74,149,21,0,0
+no schooling,5,62,170,17,0,0
+no schooling,6,50,200,11,0,0
+no schooling,7,66,165,10,0,0
+no schooling,8,149,11,156,0,0
+no schooling,9,56,184,12,0,0
+no schooling,10,77,147,13,0,0
+hard worlds,1,97,110,30,730,2
+hard worlds,2,119,96,85,737,2
+hard worlds,3,103,117,51,760,2
+hard worlds,4,70,155,10,730,2
+hard worlds,5,60,177,10,742,2
+hard worlds,6,55,191,3,728,2
+hard worlds,7,65,169,6,735,2
+hard worlds,8,151,5,148,744,2
+hard worlds,9,59,182,12,683,2
+hard worlds,10,74,153,6,654,2
+lessons,1,90,122,19,730,2
+lessons,2,112,111,93,737,2
+lessons,3,87,143,39,760,2
+lessons,4,74,149,15,730,2
+lessons,5,66,168,14,742,2
+lessons,6,52,197,4,728,2
+lessons,7,63,170,4,735,2
+lessons,8,152,4,153,744,2
+lessons,9,61,180,16,683,2
+lessons,10,75,152,10,654,2

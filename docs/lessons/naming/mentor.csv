@@ -1,0 +1,201 @@
+mind,seed,window,sleeps,meals,food_word,grounded,said
+no mentor,1,1,11,127,NaN,false,0
+no mentor,1,2,10,133,NaN,false,0
+no mentor,1,3,10,135,NaN,false,0
+no mentor,1,4,7,138,NaN,false,0
+no mentor,2,1,12,122,NaN,false,0
+no mentor,2,2,8,138,NaN,false,0
+no mentor,2,3,7,134,NaN,false,0
+no mentor,2,4,10,131,NaN,false,0
+no mentor,3,1,9,126,NaN,false,0
+no mentor,3,2,3,145,NaN,false,0
+no mentor,3,3,2,145,NaN,false,0
+no mentor,3,4,2,143,NaN,false,0
+no mentor,4,1,10,128,NaN,false,0
+no mentor,4,2,13,129,NaN,false,0
+no mentor,4,3,7,138,NaN,false,0
+no mentor,4,4,9,136,NaN,false,0
+no mentor,5,1,12,123,NaN,false,0
+no mentor,5,2,4,144,NaN,false,0
+no mentor,5,3,5,139,NaN,false,0
+no mentor,5,4,5,141,NaN,false,0
+no mentor,6,1,14,120,NaN,false,0
+no mentor,6,2,8,134,NaN,false,0
+no mentor,6,3,8,134,NaN,false,0
+no mentor,6,4,10,129,NaN,false,0
+no mentor,7,1,9,131,NaN,false,0
+no mentor,7,2,4,143,NaN,false,0
+no mentor,7,3,4,145,NaN,false,0
+no mentor,7,4,7,139,NaN,false,0
+no mentor,8,1,15,121,NaN,false,0
+no mentor,8,2,11,132,NaN,false,0
+no mentor,8,3,11,134,NaN,false,0
+no mentor,8,4,7,142,NaN,false,0
+no mentor,9,1,12,123,NaN,false,0
+no mentor,9,2,10,132,NaN,false,0
+no mentor,9,3,9,135,NaN,false,0
+no mentor,9,4,8,135,NaN,false,0
+no mentor,10,1,17,114,NaN,false,0
+no mentor,10,2,15,120,NaN,false,0
+no mentor,10,3,14,124,NaN,false,0
+no mentor,10,4,12,125,NaN,false,0
+mentor,1,1,10,130,1.000,false,758
+mentor,1,2,3,146,1.000,false,758
+mentor,1,3,13,126,1.000,false,758
+mentor,1,4,19,111,1.000,false,758
+mentor,2,1,10,129,1.000,false,772
+mentor,2,2,6,140,1.000,false,772
+mentor,2,3,9,130,1.000,false,772
+mentor,2,4,7,139,1.000,false,772
+mentor,3,1,10,129,1.000,false,357
+mentor,3,2,0,145,1.000,false,357
+mentor,3,3,1,146,1.000,false,357
+mentor,3,4,2,146,1.000,false,357
+mentor,4,1,12,124,1.000,false,607
+mentor,4,2,9,139,1.000,false,607
+mentor,4,3,10,133,1.000,false,607
+mentor,4,4,11,130,1.000,false,607
+mentor,5,1,10,128,1.000,false,646
+mentor,5,2,2,148,1.000,false,646
+mentor,5,3,4,143,1.000,false,646
+mentor,5,4,6,137,1.000,false,646
+mentor,6,1,14,122,1.000,false,846
+mentor,6,2,12,129,1.000,false,846
+mentor,6,3,11,128,1.000,false,846
+mentor,6,4,9,132,1.000,false,846
+mentor,7,1,6,139,1.000,false,338
+mentor,7,2,4,144,1.000,false,338
+mentor,7,3,7,137,1.000,false,338
+mentor,7,4,7,140,1.000,false,338
+mentor,8,1,14,125,1.000,false,775
+mentor,8,2,6,140,1.000,false,775
+mentor,8,3,13,128,1.000,false,775
+mentor,8,4,15,123,1.000,false,775
+mentor,9,1,11,125,1.000,false,686
+mentor,9,2,2,148,1.000,false,686
+mentor,9,3,8,136,1.000,false,686
+mentor,9,4,9,135,1.000,false,686
+mentor,10,1,16,117,1.000,false,892
+mentor,10,2,11,134,1.000,false,892
+mentor,10,3,14,122,1.000,false,892
+mentor,10,4,15,122,1.000,false,892
+mentor + naming,1,1,10,129,1.000,true,2044
+mentor + naming,1,2,1,150,1.000,true,2044
+mentor + naming,1,3,11,133,1.000,true,2044
+mentor + naming,1,4,10,133,1.000,true,2044
+mentor + naming,2,1,12,124,1.000,true,2001
+mentor + naming,2,2,2,146,1.000,true,2001
+mentor + naming,2,3,8,134,1.000,true,2001
+mentor + naming,2,4,9,132,1.000,true,2001
+mentor + naming,3,1,8,130,1.000,true,2000
+mentor + naming,3,2,0,148,1.000,true,2000
+mentor + naming,3,3,1,147,1.000,true,2000
+mentor + naming,3,4,2,145,1.000,true,2000
+mentor + naming,4,1,11,132,1.000,true,2029
+mentor + naming,4,2,6,139,1.000,true,2029
+mentor + naming,4,3,11,130,1.000,true,2029
+mentor + naming,4,4,10,132,1.000,true,2029
+mentor + naming,5,1,11,127,1.000,true,2021
+mentor + naming,5,2,1,148,1.000,true,2021
+mentor + naming,5,3,6,138,1.000,true,2021
+mentor + naming,5,4,5,142,1.000,true,2021
+mentor + naming,6,1,15,120,1.000,true,1993
+mentor + naming,6,2,4,144,1.000,true,1993
+mentor + naming,6,3,10,131,1.000,true,1993
+mentor + naming,6,4,10,129,1.000,true,1993
+mentor + naming,7,1,8,133,1.000,true,2005
+mentor + naming,7,2,3,148,1.000,true,2005
+mentor + naming,7,3,5,142,1.000,true,2005
+mentor + naming,7,4,6,141,1.000,true,2005
+mentor + naming,8,1,15,127,1.000,true,1945
+mentor + naming,8,2,6,141,1.000,true,1945
+mentor + naming,8,3,4,152,1.000,true,1945
+mentor + naming,8,4,13,132,1.000,true,1945
+mentor + naming,9,1,8,133,1.000,true,1966
+mentor + naming,9,2,2,148,1.000,true,1966
+mentor + naming,9,3,7,135,1.000,true,1966
+mentor + naming,9,4,7,138,1.000,true,1966
+mentor + naming,10,1,15,119,1.000,true,1929
+mentor + naming,10,2,8,139,1.000,true,1929
+mentor + naming,10,3,13,123,1.000,true,1929
+mentor + naming,10,4,13,124,1.000,true,1929
+blind mentor,1,1,16,118,0.000,false,680
+blind mentor,1,2,10,132,0.000,false,680
+blind mentor,1,3,12,129,0.000,false,680
+blind mentor,1,4,31,83,0.000,false,680
+blind mentor,2,1,15,116,0.000,false,759
+blind mentor,2,2,7,136,0.000,false,759
+blind mentor,2,3,10,132,0.000,false,759
+blind mentor,2,4,9,133,0.000,false,759
+blind mentor,3,1,9,127,0.000,false,393
+blind mentor,3,2,2,144,0.000,false,393
+blind mentor,3,3,2,144,0.000,false,393
+blind mentor,3,4,2,145,0.000,false,393
+blind mentor,4,1,14,121,0.000,false,569
+blind mentor,4,2,12,129,0.000,false,569
+blind mentor,4,3,10,133,0.000,false,569
+blind mentor,4,4,11,131,0.000,false,569
+blind mentor,5,1,11,126,0.000,false,599
+blind mentor,5,2,5,140,0.000,false,599
+blind mentor,5,3,7,137,0.000,false,599
+blind mentor,5,4,5,138,0.000,false,599
+blind mentor,6,1,12,123,0.000,false,1050
+blind mentor,6,2,11,130,0.000,false,1050
+blind mentor,6,3,7,133,0.000,false,1050
+blind mentor,6,4,9,132,0.000,false,1050
+blind mentor,7,1,11,129,0.000,false,425
+blind mentor,7,2,5,141,0.000,false,425
+blind mentor,7,3,6,140,0.000,false,425
+blind mentor,7,4,7,140,0.000,false,425
+blind mentor,8,1,20,114,0.000,false,653
+blind mentor,8,2,12,130,0.000,false,653
+blind mentor,8,3,8,140,0.000,false,653
+blind mentor,8,4,14,127,0.000,false,653
+blind mentor,9,1,10,126,0.000,false,774
+blind mentor,9,2,10,131,0.000,false,774
+blind mentor,9,3,8,135,0.000,false,774
+blind mentor,9,4,11,130,0.000,false,774
+blind mentor,10,1,15,117,0.000,false,709
+blind mentor,10,2,11,129,0.000,false,709
+blind mentor,10,3,14,122,0.000,false,709
+blind mentor,10,4,12,127,0.000,false,709
+blind + naming,1,1,14,123,0.003,false,2042
+blind + naming,1,2,10,132,0.003,false,2042
+blind + naming,1,3,12,130,0.003,false,2042
+blind + naming,1,4,10,133,0.003,false,2042
+blind + naming,2,1,13,121,0.076,true,2030
+blind + naming,2,2,8,134,0.076,true,2030
+blind + naming,2,3,8,137,0.076,true,2030
+blind + naming,2,4,6,138,0.076,true,2030
+blind + naming,3,1,12,123,0.405,false,1995
+blind + naming,3,2,0,147,0.405,false,1995
+blind + naming,3,3,3,143,0.405,false,1995
+blind + naming,3,4,3,141,0.405,false,1995
+blind + naming,4,1,18,114,0.000,false,2016
+blind + naming,4,2,10,133,0.000,false,2016
+blind + naming,4,3,9,134,0.000,false,2016
+blind + naming,4,4,8,136,0.000,false,2016
+blind + naming,5,1,13,122,0.075,false,2006
+blind + naming,5,2,7,138,0.075,false,2006
+blind + naming,5,3,8,134,0.075,false,2006
+blind + naming,5,4,4,142,0.075,false,2006
+blind + naming,6,1,14,119,0.000,false,1979
+blind + naming,6,2,10,130,0.000,false,1979
+blind + naming,6,3,9,133,0.000,false,1979
+blind + naming,6,4,11,127,0.000,false,1979
+blind + naming,7,1,8,133,0.016,true,2005
+blind + naming,7,2,5,140,0.016,true,2005
+blind + naming,7,3,8,135,0.016,true,2005
+blind + naming,7,4,5,144,0.016,true,2005
+blind + naming,8,1,17,123,0.262,false,1950
+blind + naming,8,2,11,131,0.262,false,1950
+blind + naming,8,3,12,129,0.262,false,1950
+blind + naming,8,4,10,135,0.262,false,1950
+blind + naming,9,1,12,123,0.004,false,1966
+blind + naming,9,2,8,134,0.004,false,1966
+blind + naming,9,3,8,135,0.004,false,1966
+blind + naming,9,4,10,132,0.004,false,1966
+blind + naming,10,1,14,119,0.053,false,1957
+blind + naming,10,2,11,128,0.053,false,1957
+blind + naming,10,3,13,124,0.053,false,1957
+blind + naming,10,4,13,123,0.053,false,1957

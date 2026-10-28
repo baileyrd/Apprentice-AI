@@ -14,16 +14,17 @@ use apprentice::apprentice::{Apprentice, Drives, Mind};
 use apprentice::memory::{Memory, Recall};
 use apprentice::mentor::{Mentor, Teaching};
 use apprentice::metrics::Metrics;
-use apprentice::model::Rates;
+use apprentice::model::{KINDS, Rates, kind, most_likely};
 use apprentice::sim::{Sim, SimError};
+use apprentice::world::Cell;
 
 const USAGE: &str = "\
 usage: mentor [--seeds N] [--from SEED] [--out DIR]
 
 Lives seeds FROM..FROM+N-1 (default 1..10) for 8,000 steps in the bush world
-with no mentor, a true mentor and a blind mentor. Prints median sleeps and
-meals per 2,000 steps and the final trust, and writes DIR/mentor.csv
-(default DIR: runs/mentor).";
+with no mentor, a true mentor and a blind mentor, each mentor with and without
+naming. Prints median sleeps and meals per 2,000 steps and what the mentor's
+words came to mean, and writes DIR/mentor.csv (default DIR: runs/mentor).";
 
 type Error = Box<dyn std::error::Error>;
 
@@ -32,32 +33,60 @@ const WINDOW: usize = 2_000;
 const WINDOWS: usize = STEPS / WINDOW;
 /// Squares the blind mentor wrongly believes hold food (the world has 5).
 const PHANTOMS: usize = 5;
-const MINDS: [&str; 3] = ["no mentor", "mentor", "blind mentor"];
+/// Step at which word learning is checked.
+const GROUNDED_BY: usize = 1_000;
+const MINDS: [&str; 5] = [
+    "no mentor",
+    "mentor",
+    "mentor + naming",
+    "blind mentor",
+    "blind + naming",
+];
+const KINDS_ALL: [Cell; KINDS] = [Cell::Empty, Cell::Wall, Cell::Food, Cell::Hazard];
 
 /// One life's numbers.
 struct Life {
     sleeps: [u64; WINDOWS],
     meals: [u64; WINDOWS],
+    /// What the mentor's food word means to it at the end: the chance of food.
     trust: f64,
-    hints: u32,
+    /// Every one of the mentor's words meant its kind by `GROUNDED_BY`.
+    grounded: bool,
+    said: u32,
+}
+
+/// Whether each of the mentor's words most likely means its own kind.
+fn knows_words(mind: &Apprentice<Memory>, mentor: &Mentor) -> bool {
+    KINDS_ALL.iter().all(|&cell| {
+        mind.meaning(mentor.word(cell))
+            .and_then(|m| most_likely(&m))
+            == Some(cell)
+    })
 }
 
 fn live(name: &str, seed: u64) -> Result<Life, SimError> {
     let mut sim = Sim::new(Setup::for_change(Change::Food).config, seed)?;
     let memory = Memory::new(Rates::default(), Recall::default());
     let mut mind = Apprentice::with_model(Drives::default(), memory, seed);
-    let teaching = Teaching::default();
+    let teaching = Teaching {
+        names: name.ends_with("naming"),
+        ..Teaching::default()
+    };
     let mut mentor = match name {
-        "mentor" => Some(Mentor::new(teaching, seed)),
-        "blind mentor" => Some(Mentor::blind(teaching, &sim, PHANTOMS, seed)),
-        _ => None,
+        "no mentor" => None,
+        n if n.starts_with("blind") => Some(Mentor::blind(teaching, &sim, PHANTOMS, seed)),
+        _ => Some(Mentor::new(teaching, seed)),
     };
     let mut windows = vec![Metrics::default(); WINDOWS];
-    let mut hints = 0;
+    let mut said = 0;
+    let mut grounded = false;
     for t in 0..STEPS {
-        if let Some(at) = mentor.as_mut().and_then(|m| m.hint(&sim)) {
-            mind.hear(at);
-            hints += 1;
+        if t == GROUNDED_BY {
+            grounded = mentor.as_ref().is_some_and(|m| knows_words(&mind, m));
+        }
+        if let Some((at, word)) = mentor.as_mut().and_then(|m| m.say(&sim)) {
+            mind.hear(at, word);
+            said += 1;
         }
         let action = mind.act(&sim.observe());
         let outcome = sim.step(action);
@@ -69,8 +98,11 @@ fn live(name: &str, seed: u64) -> Result<Life, SimError> {
     Ok(Life {
         sleeps: count(|m| m.summary().sleeps),
         meals: count(|m| m.summary().meals),
-        trust: mind.trust(),
-        hints,
+        trust: mentor
+            .and_then(|m| mind.meaning(m.word(Cell::Food)))
+            .map_or(f64::NAN, |m| m[kind(Cell::Food)]),
+        grounded,
+        said,
     })
 }
 
@@ -105,19 +137,20 @@ fn parse(args: &[String]) -> Result<(u64, u64, PathBuf), String> {
 }
 
 fn execute(seeds: u64, from: u64, out: &PathBuf) -> Result<(), Error> {
-    let mut csv = String::from("mind,seed,window,sleeps,meals,trust,hints\n");
+    let mut csv = String::from("mind,seed,window,sleeps,meals,food_word,grounded,said\n");
     for name in MINDS {
         let mut lives = Vec::new();
         for seed in from..from + seeds {
             let life = live(name, seed)?;
             for w in 0..WINDOWS {
                 csv.push_str(&format!(
-                    "{name},{seed},{},{},{},{:.3},{}\n",
+                    "{name},{seed},{},{},{},{:.3},{},{}\n",
                     w + 1,
                     life.sleeps[w],
                     life.meals[w],
                     life.trust,
-                    life.hints
+                    life.grounded,
+                    life.said
                 ));
             }
             lives.push(life);
@@ -130,12 +163,14 @@ fn execute(seeds: u64, from: u64, out: &PathBuf) -> Result<(), Error> {
             .map(|w| format!("{:.0}", med(&|l| l.meals[w] as f64)))
             .collect();
         println!(
-            "{name:>12}: sleeps per 2,000 steps [{}], meals [{}], sleeps 1-4,000 {:.1}, trust {:.2}, hints {:.0}",
+            "{name:>15}: sleeps per 2,000 steps [{}], meals [{}], sleeps 1-4,000 {:.1}, food word {:.2}, knew all words by step 1,000 in {}/{}, said {:.0}",
             sleeps.join(", "),
             meals.join(", "),
             med(&|l| (l.sleeps[0] + l.sleeps[1]) as f64),
             med(&|l| l.trust),
-            med(&|l| f64::from(l.hints)),
+            lives.iter().filter(|l| l.grounded).count(),
+            lives.len(),
+            med(&|l| f64::from(l.said)),
         );
     }
     fs::create_dir_all(out)?;

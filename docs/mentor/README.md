@@ -1,5 +1,9 @@
 # Mentor: hints when stuck, faded like stabilisers
 
+Since [lessons and naming](../lessons/README.md), a hint is a word the
+apprentice must learn, not a point it trusts at 0.5. The numbers below are
+from before that change; the reruns are in that note.
+
 ## Rules fixed before running
 
 Seeds 1–10, bush world, 8,000 steps, the current apprentice (memory, meal
