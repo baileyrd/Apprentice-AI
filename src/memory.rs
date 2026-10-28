@@ -10,6 +10,10 @@
 //!   usually is, not how it was last seen: a bush it keeps eating from stays
 //!   food in the map even though it was last seen empty.
 //!
+//! Meals are replayed more than other moments (`meal_replays` extra times
+//! each), as rewarding moments are in animal sleep. Without that, a bush is
+//! remembered as mostly empty, because it is mostly seen just after a meal.
+//!
 //! In sleep, squares the diary rehearsed and found as expected grow
 //! **stiffer**; squares it did not rehearse **decay** toward the prior, slower
 //! the stiffer they are. Decayed squares grow uncertain again, which is what
@@ -40,6 +44,9 @@ pub struct Recall {
     pub decay: f64,
     /// Steps the diary holds before it forces a nap.
     pub capacity: usize,
+    /// Extra replays of each meal in sleep: rewarding moments are rehearsed
+    /// more, so a place that fed it is remembered as food.
+    pub meal_replays: usize,
     /// Rate of each map's running prediction error.
     pub fit_rate: f64,
     /// A map whose running error is above this does not fit.
@@ -55,6 +62,7 @@ impl Default for Recall {
             consolidation: 0.2,
             decay: 2e-4,
             capacity: 64,
+            meal_replays: 5,
             fit_rate: 0.02,
             misfit: 0.3,
             settle: 300,
@@ -105,6 +113,8 @@ pub struct Memory {
     sensory: f64,
     fast: HashMap<Pos, Belief>,
     diary: Vec<(Pos, Cell)>,
+    /// Where it ate today.
+    meals: Vec<Pos>,
     contexts: Vec<Context>,
     active: usize,
     t: u64,
@@ -126,6 +136,7 @@ impl Memory {
             sensory: rates.sensory,
             fast: HashMap::new(),
             diary: Vec::new(),
+            meals: Vec::new(),
             contexts: vec![Context::new(PredictiveCoding::new(slow))],
             active: 0,
             t: 0,
@@ -157,6 +168,11 @@ impl Memory {
             ctx.map.learn(at, sensed);
             rehearsed.insert(at);
         }
+        for &at in &self.meals {
+            for _ in 0..self.recall.meal_replays {
+                ctx.map.learn(at, Cell::Food);
+            }
+        }
         let faded: Vec<Pos> = ctx.map.known().filter(|p| !rehearsed.contains(p)).collect();
         for at in faded {
             let stiff = f64::from(ctx.stiffness.get(&at).copied().unwrap_or(0));
@@ -164,6 +180,7 @@ impl Memory {
             ctx.map.fade(at, amount);
         }
         self.diary.clear();
+        self.meals.clear();
         self.fast.clear();
         self.last_sleep = self.t;
     }
@@ -252,6 +269,10 @@ impl WorldModel for Memory {
     fn sleep(&mut self) {
         self.consolidate();
     }
+
+    fn fed(&mut self, at: Pos) {
+        self.meals.push(at);
+    }
 }
 
 #[cfg(test)]
@@ -310,6 +331,31 @@ mod tests {
         assert_eq!(m.believes(ORIGIN), Some(Cell::Empty));
         m.sleep();
         assert_eq!(m.believes(ORIGIN), Some(Cell::Food));
+    }
+
+    #[test]
+    fn a_meal_is_rehearsed_until_the_place_means_food() {
+        let mut plain = Memory::new(
+            Rates::default(),
+            Recall {
+                meal_replays: 0,
+                ..Recall::default()
+            },
+        );
+        let mut rewarded = memory();
+        for m in [&mut plain, &mut rewarded] {
+            let mut v = [Cell::Empty; VIEW * VIEW];
+            v[Observation::CENTER] = Cell::Food;
+            m.observe(&at(ORIGIN, v));
+            m.fed(ORIGIN);
+            v[Observation::CENTER] = Cell::Empty; // eaten, then seen empty
+            for _ in 0..10 {
+                m.observe(&at(ORIGIN, v));
+            }
+            m.sleep();
+        }
+        assert_eq!(plain.believes(ORIGIN), Some(Cell::Empty));
+        assert_eq!(rewarded.believes(ORIGIN), Some(Cell::Food));
     }
 
     #[test]

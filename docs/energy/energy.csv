@@ -1,0 +1,51 @@
+mind,seed,sleeps,meals,mean_energy,hungry_share
+sees the map,1,0,890,87.19,0.000
+sees the map,2,0,890,87.89,0.000
+sees the map,3,0,1000,92.53,0.000
+sees the map,4,0,890,87.97,0.000
+sees the map,5,0,910,89.61,0.001
+sees the map,6,0,890,89.44,0.000
+sees the map,7,0,978,89.78,0.001
+sees the map,8,0,930,88.80,0.001
+sees the map,9,0,870,87.50,0.000
+sees the map,10,0,728,85.85,0.000
+phase 4,1,149,300,37.93,0.688
+phase 4,2,137,330,37.78,0.693
+phase 4,3,93,406,46.28,0.524
+phase 4,4,71,466,49.95,0.467
+phase 4,5,221,178,31.08,0.861
+phase 4,6,130,238,31.51,0.849
+phase 4,7,89,434,48.86,0.501
+phase 4,8,66,490,55.09,0.410
+phase 4,9,148,308,37.54,0.684
+phase 4,10,180,237,31.47,0.841
+patient,1,136,332,39.28,0.655
+patient,2,136,333,37.69,0.696
+patient,3,93,408,45.56,0.536
+patient,4,69,473,49.13,0.474
+patient,5,198,223,33.56,0.809
+patient,6,128,250,31.83,0.844
+patient,7,81,447,49.04,0.497
+patient,8,53,529,60.46,0.335
+patient,9,135,336,38.45,0.664
+patient,10,171,248,31.74,0.839
+meal replay,1,104,387,39.06,0.686
+meal replay,2,78,443,41.07,0.653
+meal replay,3,21,545,56.34,0.345
+meal replay,4,59,491,51.02,0.442
+meal replay,5,48,506,45.55,0.556
+meal replay,6,131,250,32.02,0.839
+meal replay,7,44,515,54.64,0.392
+meal replay,8,51,524,58.09,0.371
+meal replay,9,67,466,43.34,0.597
+meal replay,10,81,435,39.51,0.703
+patient + meal replay,1,38,533,46.42,0.547
+patient + meal replay,2,37,525,46.60,0.551
+patient + meal replay,3,16,559,61.63,0.235
+patient + meal replay,4,39,531,49.24,0.484
+patient + meal replay,5,26,547,48.97,0.495
+patient + meal replay,6,40,517,40.16,0.689
+patient + meal replay,7,24,558,57.47,0.333
+patient + meal replay,8,44,529,52.45,0.447
+patient + meal replay,9,39,525,46.57,0.548
+patient + meal replay,10,58,483,42.25,0.629

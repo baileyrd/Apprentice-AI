@@ -97,7 +97,7 @@ impl Default for Drives {
         Self {
             setpoint: 80.0,
             curiosity: 0.5,
-            discount: 0.9,
+            discount: 0.97,
             horizon: 20,
             learning: 0.2,
             vigilance: 0.01,
@@ -145,7 +145,8 @@ pub struct Apprentice<M = PredictiveCoding> {
     volatility: f64,
     last_seen: HashMap<Pos, u64>,
     t: u64,
-    pending: Option<(Tried, f64)>,
+    /// What it tried last, its energy before, and where it stood.
+    pending: Option<(Tried, f64, Pos)>,
     surprise: f64,
 }
 
@@ -317,7 +318,7 @@ impl<M: WorldModel> Mind for Apprentice<M> {
         self.learn_volatility(obs);
         self.surprise = self.model.observe(obs);
         let (action, tried) = self.choose(obs);
-        self.pending = Some((tried, f64::from(obs.energy)));
+        self.pending = Some((tried, f64::from(obs.energy), obs.offset));
         action
     }
 
@@ -325,13 +326,16 @@ impl<M: WorldModel> Mind for Apprentice<M> {
         if outcome.slept {
             self.model.sleep();
         }
-        let Some((tried, before)) = self.pending.take() else {
+        let Some((tried, before, at)) = self.pending.take() else {
             return;
         };
         if outcome.slept {
             return; // the energy reset says nothing about the action
         }
         let felt = f64::from(outcome.energy) - before;
+        if matches!(tried, Tried::Eat(_)) && felt > 0.0 {
+            self.model.fed(at);
+        }
         let rate = self.drives.learning;
         let slot = match tried {
             Tried::Enter(k) => &mut self.valence.enter[k],
@@ -432,7 +436,7 @@ mod tests {
     #[test]
     fn valence_is_learned_from_felt_energy() {
         let mut a = apprentice(0.0);
-        a.pending = Some((Tried::Eat(kind(Cell::Food)), 40.0));
+        a.pending = Some((Tried::Eat(kind(Cell::Food)), 40.0, ORIGIN));
         a.feel(&felt(64));
         let expected = 25.0 + 0.2 * (24.0 - 25.0);
         assert!((a.valence.eat[kind(Cell::Food)] - expected).abs() < 1e-12);
@@ -441,7 +445,7 @@ mod tests {
     #[test]
     fn sleep_teaches_nothing() {
         let mut a = apprentice(0.0);
-        a.pending = Some((Tried::Rest, 1.0));
+        a.pending = Some((Tried::Rest, 1.0, ORIGIN));
         a.feel(&Outcome {
             event: Event::Rested,
             energy: 50,
