@@ -7,18 +7,21 @@ square with everything it has learned intact.
 
 Design sketch: <https://claude.ai/artifact/NGoii1LqBsYDEWPomT7mSQ>
 
-## Status: mentor lessons and naming
+## Status: patterns
 
 The world, the body, the yardstick, a world model that learns, an
 apprentice that chooses its own actions from drive and curiosity, a replay
 dashboard, and a memory: a diary replayed into per-world maps in sleep, with
 consolidation and decay. A mentor speaks in words the apprentice
 learns from what it sees, names things, hints when it is stuck, and can set
-lessons in easier worlds.
+lessons in easier worlds. A slowest
+memory learns in sleep, from every world, how squares change, so a pattern
+seen before is anticipated in a new world.
 Results: [phase 1](docs/p1/README.md), [phase 2](docs/p2/README.md),
 [phase 3](docs/p3/README.md), [phase 4](docs/p4/README.md),
 [energy fix](docs/energy/README.md), [mentor](docs/mentor/README.md),
-[lessons and naming](docs/lessons/README.md).
+[lessons and naming](docs/lessons/README.md),
+[patterns](docs/patterns/README.md).
 
 | Module      | What it holds                                                   |
 |-------------|-----------------------------------------------------------------|
@@ -29,6 +32,7 @@ Results: [phase 1](docs/p1/README.md), [phase 2](docs/p2/README.md),
 | `metrics`   | Meals, sleeps, bumps, hurts, mean energy, mean time to food     |
 | `model`     | World models: two-layer predictive coding; backprop baseline    |
 | `memory`    | Diary over per-world maps; sleep replay, stiffening, decay      |
+| `patterns`  | How squares change, by state and age; learned in sleep, any world |
 | `apprentice`| The learner: learned valence and volatility, drive + curiosity  |
 | `mentor`    | Words about squares: hints when stuck, names; fades; can be blind |
 | `lessons`   | A course of worlds, easiest first, moving on at mastery         |
@@ -93,6 +97,13 @@ Sits an exam in a hard world after no schooling, after time in hard worlds,
 or after the mentor's lessons.
 
 ```sh
+cargo run --release --bin transfer -- --out docs/patterns
+```
+
+Lives three bush worlds then a fresh one, with patterns on and off: does it
+anticipate regrowth there, settle faster, and sleep less?
+
+```sh
 cargo run --release --bin dashboard -- --out docs/p3/dashboard.html
 ```
 
@@ -107,5 +118,6 @@ map, surprise and energy, as the walls and then the food move.
 4. **P3** dashboard (believed vs real map) and food-move adaptation (done)
 5. **P4** episodic diary, sleep replay, consolidation and decay (done)
 6. **Mentor** hints when stuck, faded, checked against its own senses (done)
-7. **Mentor lessons and naming** words learned from experience; a course of worlds (this)
-8. Later: language, multiple apprentices
+7. **Mentor lessons and naming** words learned from experience; a course of worlds (done)
+8. **Patterns** a slowest memory of how squares change, carried across worlds (this)
+9. Later: language, multiple apprentices
