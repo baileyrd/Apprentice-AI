@@ -38,8 +38,8 @@ pub fn csv(series: &[Series]) -> String {
     out
 }
 
-// Reference palette (light): categorical slots 1-3, ink and surfaces.
-const SERIES: [&str; 3] = ["#2a78d6", "#eb6834", "#1baf7a"];
+// Reference palette (light): categorical slots 1-4, ink and surfaces.
+const SERIES: [&str; 4] = ["#2a78d6", "#eb6834", "#1baf7a", "#8d5fd3"];
 const SURFACE: &str = "#fcfcfb";
 const INK: &str = "#0b0b0b";
 const INK_2: &str = "#52514e";
@@ -246,6 +246,65 @@ pub struct Figure<'a> {
     pub map_range: (f64, f64),
 }
 
+/// One titled panel of a figure: lines over a fixed y range.
+struct Chart<'a> {
+    title: &'a str,
+    lines: &'a [Line<'a>],
+    range: (f64, f64),
+}
+
+const CHART_H: f64 = 260.0;
+
+/// Opens an SVG figure with a title and a subtitle.
+fn open_figure(s: &mut String, height: f64, title: &str, subtitle: &str) {
+    let _ = write!(
+        s,
+        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {WIDTH} {height}" width="{WIDTH}" height="{height}" font-family="system-ui, -apple-system, Segoe UI, sans-serif"><rect width="100%" height="100%" fill="{SURFACE}"/>"#
+    );
+    let _ = write!(
+        s,
+        r#"<text x="{PAD}" y="32" font-size="18" font-weight="600" fill="{INK}">{title}</text><text x="{PAD}" y="52" font-size="13" fill="{INK_2}">{subtitle}</text>"#,
+    );
+}
+
+/// Stacks `charts` from `top` on a shared x axis; returns where they end.
+fn charts(
+    s: &mut String,
+    top: f64,
+    charts: &[Chart],
+    x_range: (f64, f64),
+    x_label: &str,
+    v_guides: &[(f64, &str)],
+) -> f64 {
+    let ticks = step_ticks(x_range);
+    let mut top = top;
+    for c in charts {
+        let _ = write!(
+            s,
+            r#"<text x="{PAD}" y="{ty}" font-size="13" font-weight="600" fill="{INK}">{title}</text>"#,
+            ty = top + 14.0,
+            title = c.title,
+        );
+        line_plot(
+            s,
+            &Plot {
+                top: top + 20.0,
+                height: CHART_H - 20.0,
+                x_range,
+                x_ticks: ticks.clone(),
+                x_label,
+                y_min: c.range.0,
+                y_max: c.range.1,
+                lines: c.lines,
+                h_guides: Vec::new(),
+                v_guides: v_guides.to_vec(),
+            },
+        );
+        top += CHART_H + 30.0;
+    }
+    top
+}
+
 /// Adaptation figure: trailing surprise and the map measure around the
 /// change, then each seed's adaptation time per mind.
 pub fn adaptation_svg(
@@ -256,63 +315,76 @@ pub fn adaptation_svg(
     x_range: (f64, f64),
     horizon: usize,
 ) -> String {
-    let panel_h = 260.0;
     let strip_h = 60.0 + 36.0 * times.len() as f64;
-    let height = 70.0 + 2.0 * (panel_h + 30.0) + strip_h;
+    let height = 70.0 + 2.0 * (CHART_H + 30.0) + strip_h;
     let mut s = String::new();
-    let _ = write!(
-        s,
-        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {WIDTH} {height}" width="{WIDTH}" height="{height}" font-family="system-ui, -apple-system, Segoe UI, sans-serif"><rect width="100%" height="100%" fill="{SURFACE}"/>"#
-    );
-    let _ = write!(
-        s,
-        r#"<text x="{PAD}" y="32" font-size="18" font-weight="600" fill="{INK}">{}</text><text x="{PAD}" y="52" font-size="13" fill="{INK_2}">Over 10 seeds. Step 0 is the first step after the change.</text>"#,
+    open_figure(
+        &mut s,
+        height,
         figure.title,
+        "Over 10 seeds. Step 0 is the first step after the change.",
     );
-    let ticks = step_ticks(x_range);
     let surprise_top = nice_ceiling(peak(surprise).max(1e-6));
     let panels = [
-        (
-            surprise,
-            "Surprise (mean of last 100 steps)",
-            70.0,
-            (0.0, surprise_top),
-        ),
-        (
-            accuracy,
-            figure.map_title,
-            70.0 + panel_h + 30.0,
-            figure.map_range,
-        ),
+        Chart {
+            title: "Surprise (mean of last 100 steps)",
+            lines: surprise,
+            range: (0.0, surprise_top),
+        },
+        Chart {
+            title: figure.map_title,
+            lines: accuracy,
+            range: figure.map_range,
+        },
     ];
-    for (lines, title, top, (y_min, y_max)) in panels {
-        let _ = write!(
-            s,
-            r#"<text x="{PAD}" y="{ty}" font-size="13" font-weight="600" fill="{INK}">{title}</text>"#,
-            ty = top + 14.0,
-        );
-        line_plot(
-            &mut s,
-            &Plot {
-                top: top + 20.0,
-                height: panel_h - 20.0,
-                x_range,
-                x_ticks: ticks.clone(),
-                x_label: "steps after the change",
-                y_min,
-                y_max,
-                lines,
-                h_guides: Vec::new(),
-                v_guides: vec![(0.0, "change")],
-            },
-        );
-    }
-    strip(&mut s, times, horizon, 70.0 + 2.0 * (panel_h + 30.0));
+    let bottom = charts(
+        &mut s,
+        70.0,
+        &panels,
+        x_range,
+        "steps after the change",
+        &[(0.0, "change")],
+    );
+    strip(&mut s, times, horizon, bottom);
     s.push_str("</svg>\n");
     s
 }
 
-/// One row per mind, one dot per seed at its adaptation time.
+/// Relearning figure: trailing surprise and map accuracy across the A, B,
+/// A phases, with each phase start marked.
+pub fn relearn_svg(
+    title: &str,
+    surprise: &[Line],
+    accuracy: &[Line],
+    x_range: (f64, f64),
+    marks: &[(f64, &str)],
+) -> String {
+    let height = 70.0 + 2.0 * (CHART_H + 30.0);
+    let mut s = String::new();
+    open_figure(
+        &mut s,
+        height,
+        title,
+        "Median over 10 seeds. The mind is never told which world it is in.",
+    );
+    let surprise_top = nice_ceiling(peak(surprise).max(1e-6));
+    let panels = [
+        Chart {
+            title: "Surprise (mean of last 100 steps)",
+            lines: surprise,
+            range: (0.0, surprise_top),
+        },
+        Chart {
+            title: "Share of the believed map that is right (walls, hazards, open floor)",
+            lines: accuracy,
+            range: (0.0, 1.0),
+        },
+    ];
+    charts(&mut s, 70.0, &panels, x_range, "steps", marks);
+    s.push_str("</svg>\n");
+    s
+}
+
 fn strip(s: &mut String, times: &[(&str, Vec<Option<usize>>)], horizon: usize, top: f64) {
     let (left, right) = (PAD + 140.0, WIDTH - PAD - 160.0);
     let x = |v: f64| left + v / horizon as f64 * (right - left);

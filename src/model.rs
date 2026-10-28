@@ -93,9 +93,13 @@ pub trait WorldModel {
 
     /// Most likely kind at `at`, or `None` if the square was never seen.
     fn believes(&self, at: Pos) -> Option<Cell>;
+
+    /// The body slept. Models with a memory consolidate here.
+    fn sleep(&mut self) {}
 }
 
-fn most_likely(b: &Belief) -> Option<Cell> {
+/// Most likely kind under `b`.
+pub fn most_likely(b: &Belief) -> Option<Cell> {
     let best = (0..KINDS).max_by(|&i, &j| b[i].total_cmp(&b[j]))?;
     Some(BY_KIND[best])
 }
@@ -123,6 +127,36 @@ impl PredictiveCoding {
     /// Layer 2's expectation for any square.
     pub fn prior(&self) -> Belief {
         self.prior
+    }
+
+    /// Whether `at` has ever been seen.
+    pub fn knows(&self, at: Pos) -> bool {
+        self.cells.contains_key(&at)
+    }
+
+    /// Every square it holds a belief about.
+    pub fn known(&self) -> impl Iterator<Item = Pos> + '_ {
+        self.cells.keys().copied()
+    }
+
+    /// Moves the belief at `at` a share `amount` of the way back to the prior.
+    pub fn fade(&mut self, at: Pos, amount: f64) {
+        let prior = self.prior;
+        if let Some(b) = self.cells.get_mut(&at) {
+            for (k, p) in b.iter_mut().enumerate() {
+                *p += amount * (prior[k] - *p);
+            }
+        }
+    }
+
+    /// A blank model with this one's rates and prior: general expectations
+    /// kept, particular squares unknown.
+    pub fn schema(&self) -> Self {
+        Self {
+            rates: self.rates,
+            prior: self.prior,
+            cells: HashMap::new(),
+        }
     }
 }
 
