@@ -575,7 +575,7 @@ mod tests {
     fn a_word_about_an_unseen_square_is_dropped() {
         let mut m = memory();
         m.hear(Pos { x: 9, y: 9 }, Word(9));
-        assert!(m.contexts[0].seen.get(&Pos { x: 9, y: 9 }).is_none());
+        assert!(!m.contexts[0].seen.contains_key(&Pos { x: 9, y: 9 }));
     }
 
     #[test]
