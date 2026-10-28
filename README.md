@@ -7,15 +7,16 @@ square with everything it has learned intact.
 
 Design sketch: <https://claude.ai/artifact/NGoii1LqBsYDEWPomT7mSQ>
 
-## Status: phase 4
+## Status: mentor
 
 The world, the body, the yardstick, a world model that learns, an
 apprentice that chooses its own actions from drive and curiosity, a replay
 dashboard, and a memory: a diary replayed into per-world maps in sleep, with
-consolidation and decay.
+consolidation and decay. A mentor can point the hungry apprentice at food;
+the apprentice checks each hint and learns how far to trust it.
 Results: [phase 1](docs/p1/README.md), [phase 2](docs/p2/README.md),
 [phase 3](docs/p3/README.md), [phase 4](docs/p4/README.md),
-[energy fix](docs/energy/README.md).
+[energy fix](docs/energy/README.md), [mentor](docs/mentor/README.md).
 
 | Module      | What it holds                                                   |
 |-------------|-----------------------------------------------------------------|
@@ -27,6 +28,7 @@ Results: [phase 1](docs/p1/README.md), [phase 2](docs/p2/README.md),
 | `model`     | World models: two-layer predictive coding; backprop baseline    |
 | `memory`    | Diary over per-world maps; sleep replay, stiffening, decay      |
 | `apprentice`| The learner: learned valence and volatility, drive + curiosity  |
+| `mentor`    | Points at food when the apprentice is stuck; fades; can be blind |
 | `adaptation`| Move half the walls or all the food, time the recovery          |
 | `relearn`   | World A, then B, then A again: does B erase A?                  |
 | `experiment`| Surprise-per-episode run and the pre-registered fallback rule   |
@@ -73,6 +75,13 @@ Compares sleeps and meals against an agent that sees the real map, and
 breaks down the energy fix (meal replay, patience).
 
 ```sh
+cargo run --release --bin mentor -- --out docs/mentor
+```
+
+Lives with no mentor, a mentor that sees the map, and a blind mentor;
+counts sleeps and meals per 2,000 steps and the trust it learns.
+
+```sh
 cargo run --release --bin dashboard -- --out docs/p3/dashboard.html
 ```
 
@@ -85,5 +94,6 @@ map, surprise and energy, as the walls and then the food move.
 2. **P1** predictive-coding world model; surprise curve (done)
 3. **P2** action from homeostatic drive + curiosity (done)
 4. **P3** dashboard (believed vs real map) and food-move adaptation (done)
-5. **P4** episodic diary, sleep replay, consolidation and decay (this)
-6. Later: mentor, language, multiple apprentices
+5. **P4** episodic diary, sleep replay, consolidation and decay (done)
+6. **Mentor** hints when stuck, faded, checked against its own senses (this)
+7. Later: mentor lessons and naming, language, multiple apprentices
