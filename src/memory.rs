@@ -240,12 +240,15 @@ impl Memory {
     fn switch(&mut self, to: usize) {
         self.consolidate();
         let since = self.lost_since;
-        let recent: Vec<(Pos, Seen)> = self.contexts[self.active]
-            .seen
+        let seen = &mut self.contexts[self.active].seen;
+        let recent: Vec<(Pos, Seen)> = seen
             .iter()
             .filter(|(_, s)| s.sensed >= since)
             .map(|(&at, &s)| (at, s))
             .collect();
+        for (at, _) in &recent {
+            seen.remove(at);
+        }
         self.contexts[to].seen.extend(recent);
         self.active = to;
         for ctx in &mut self.contexts {
@@ -573,6 +576,19 @@ mod tests {
         assert_eq!(m.patterns.predict(Last::Ate, 40), None);
         m.sleep();
         assert!(m.patterns.predict(Last::Ate, 40).is_some());
+    }
+
+    #[test]
+    fn a_switch_moves_what_was_seen_since_the_old_map_stopped_fitting() {
+        let mut m = memory();
+        live(&mut m, 3, 2_000);
+        let before = m.contexts[0].seen.len();
+        live(&mut m, 4, 2_000);
+        let since = m.lost_since;
+        let stale = |c: &Context| c.seen.values().filter(|s| s.sensed >= since).count();
+        assert_eq!(m.active(), 1);
+        assert_eq!(stale(&m.contexts[0]), 0, "world B's squares left in A");
+        assert!(!m.contexts[1].seen.is_empty() && before > 0);
     }
 
     #[test]
