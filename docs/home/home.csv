@@ -1,0 +1,51 @@
+seed,place,answer_100,answer_300,first_no
+1,home,yes,yes,
+1,changed home,yes,yes,
+1,stranger,no,no,39
+1,stranger,no,no,38
+1,stranger,no,no,46
+2,home,yes,yes,
+2,changed home,yes,yes,
+2,stranger,no,no,41
+2,stranger,no,no,40
+2,stranger,no,no,41
+3,home,yes,yes,
+3,changed home,yes,yes,
+3,stranger,no,no,55
+3,stranger,yes,yes,
+3,stranger,no,no,48
+4,home,yes,yes,
+4,changed home,yes,yes,
+4,stranger,no,no,39
+4,stranger,no,no,49
+4,stranger,no,no,37
+5,home,yes,yes,
+5,changed home,yes,yes,
+5,stranger,no,no,38
+5,stranger,no,no,39
+5,stranger,no,no,45
+6,home,yes,yes,
+6,changed home,yes,yes,
+6,stranger,no,no,38
+6,stranger,no,no,45
+6,stranger,no,no,37
+7,home,yes,yes,
+7,changed home,yes,yes,
+7,stranger,yes,yes,
+7,stranger,no,no,49
+7,stranger,no,no,55
+8,home,yes,yes,
+8,changed home,yes,yes,
+8,stranger,no,no,36
+8,stranger,no,no,37
+8,stranger,no,no,35
+9,home,yes,yes,
+9,changed home,yes,yes,
+9,stranger,no,no,37
+9,stranger,no,no,37
+9,stranger,no,no,38
+10,home,yes,yes,
+10,changed home,yes,yes,
+10,stranger,no,no,37
+10,stranger,no,no,39
+10,stranger,no,no,38

@@ -107,6 +107,13 @@ anticipate regrowth there, settle faster, and sleep less?
 cargo run --release --bin relearn -- --out docs/recognition/relearn
 ```
 
+```sh
+cargo run --release --bin home -- --out docs/home
+```
+
+Lives in a small home world, then is put in home, home with a wall moved, or
+a stranger, and asked "is this home?" ([docs/home](docs/home/README.md)).
+
 The A/B/A test also counts mix-ups: steps in world B spent on A's map
 ([docs/recognition](docs/recognition/README.md)).
 
@@ -130,5 +137,6 @@ and patterns, showing which map it is using
 6. **Mentor** hints when stuck, faded, checked against its own senses (done)
 7. **Mentor lessons and naming** words learned from experience; a course of worlds (done)
 8. **Patterns** a slowest memory of how squares change, carried across worlds (done)
-9. **Recognition** stronger evidence before going back to an old world's map (this)
-10. Later: language, multiple apprentices
+9. **Recognition** stronger evidence before going back to an old world's map (done)
+10. **Home** knowing its own world: doubt that builds up, held memories, expected regrowth (this)
+11. Later: language, multiple apprentices

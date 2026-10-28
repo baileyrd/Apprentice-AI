@@ -1,0 +1,21 @@
+mind,seed,anticipation,settle,fresh_sleeps,home_sleeps
+without patterns,1,0.763,252,9,40
+without patterns,2,0.734,266,43,31
+without patterns,3,0.740,310,22,16
+without patterns,4,0.747,394,35,38
+without patterns,5,0.764,403,5,26
+without patterns,6,0.782,284,14,42
+without patterns,7,0.760,342,5,30
+without patterns,8,0.740,314,28,63
+without patterns,9,0.235,267,20,39
+without patterns,10,0.741,318,13,58
+with patterns,1,0.902,515,5,8
+with patterns,2,0.594,325,27,9
+with patterns,3,0.698,247,4,5
+with patterns,4,0.862,310,2,19
+with patterns,5,0.999,259,2,6
+with patterns,6,0.997,255,1,12
+with patterns,7,0.735,1485,4,11
+with patterns,8,0.082,241,5,13
+with patterns,9,0.916,195,3,9
+with patterns,10,1.000,311,0,16

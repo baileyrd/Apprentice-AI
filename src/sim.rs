@@ -125,8 +125,15 @@ impl Sim {
         let start = rng
             .pick(&grid.positions_of(Cell::Empty))
             .ok_or(SimError::NoRoomForAgent)?;
+        Ok(Self::with_start(config, grid, start, rng))
+    }
+
+    /// Uses a given grid and wake square, which is cleared if it held
+    /// anything.
+    pub fn with_start(config: Config, mut grid: Grid, start: Pos, rng: Rng) -> Self {
+        grid.set(start, Cell::Empty);
         let energy = config.physiology.start_energy;
-        Ok(Self {
+        Self {
             config,
             grid,
             start,
@@ -135,7 +142,7 @@ impl Sim {
             t: 0,
             rng,
             regrowing: Vec::new(),
-        })
+        }
     }
 
     pub fn grid(&self) -> &Grid {
