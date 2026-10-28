@@ -61,8 +61,82 @@ not lying, it just has a different vocabulary, and the apprentice would learn
 it just as well. A mentor whose words carry no information is the real test
 of whether bad words get ignored.
 
+## Tuning, disclosed
+
+On seeds 101–110, before the final run, I found two things and changed one
+setting. The rules above are unchanged.
+
+- **The barren test had nothing to fix.** Patterns learn by a delta rule, so
+  the general pattern mostly says what the last world taught. With the
+  upbringing as first planned (ending in a barren world), the general pattern
+  already gave an eaten square no chance of food when it reached the new
+  barren world, with or without words. **Change:** each test now gets its own
+  upbringing, ending in the other kind of world: bush, barren, bush, barren
+  before the bush test (as planned), and barren, bush, barren, bush before
+  the barren test. So in both tests, what it last learned is wrong. Rule 1 is
+  read after the first of these, as planned.
+- **Most futile returns are not hopes.** Trying to eat on an empty square
+  costs the same as resting, so the apprentice often "eats" where it stands
+  while idle. Nearly all futile returns happened when it gave the square no
+  chance of food. Rule 2 still counts them, as written, but I added one
+  diagnostic, not a rule: **false hopes**, the times a square it ate from
+  comes into view empty when it gave that square more than even odds of food
+  just before. That is the mistake a word should prevent.
+
 Reproduce:
 
 ```sh
 cargo run --release --bin foretell -- --out docs/language
 ```
+
+Per-seed numbers are in [foretell.csv](foretell.csv). All numbers are
+medians over seeds 1–10, one run.
+
+## Results
+
+| Mind | Words learned | Barren: futile returns | Barren: false hopes | Barren: meals | Bush: sleeps | Bush: meals |
+|---|--:|--:|--:|--:|--:|--:|
+| No mentor | – | 29 | 27.5 | 23 | 8.5 | 269 |
+| True mentor | 7/10 | 31 | **0** | 28.5 | **5** | 275 |
+| Random mentor | 0/10 | 38.5 | 4 | 29.5 | 11.5 | 266 |
+
+Barren columns are the first 1,000 steps of 2,000 (meals over all 2,000);
+bush columns are 4,000 steps.
+
+| Rule | Result | Met? |
+|---|---|---|
+| 1. Words learned in ≥ 9/10 | 7/10. "Stays gone" ≤ 0.03 in all 10; "grows back" 0.49, 0.51, 0.74 in seeds 8, 10, 1 | **no** |
+| 2. Futile returns ≥ 50% below no mentor | 31 vs 29, +7% | **no** |
+| 3. Bush sleeps ≤ 10% above no mentor | 5 vs 8.5, −41% | yes |
+| 4. Random mentor's futile returns ≤ 10% above | 38.5 vs 29, +33% | **no** |
+
+## What it shows
+
+- **The words do what they were for.** Raised by the true mentor, the
+  apprentice had no false hopes in the new barren world in any seed (one
+  seed had one), against a median of 27.5 without words. And in the new bush
+  world, where its general pattern had just learned that eaten food stays
+  gone, the "grows back" word sent it back to bushes: 41% fewer sleeps.
+- **Rule 2 measured the wrong thing.** Futile returns barely moved because
+  nearly all of them are idle "eating" on an empty square, which costs the
+  same as resting. Fixing that tie is outside this phase, so the rule
+  misses. This also explains the "aimless futile eating" left open after the
+  unlearning test.
+- **"Grows back" is a softer truth than "stays gone".** A bush doesn't
+  regrow while the apprentice stands on it, so a square it was told grows
+  back can still look empty at 32–63 steps. In 3 seeds that pulled the
+  meaning to 0.5–0.74.
+- **Noise is not ignored: it is learned as "empty".** The random mentor's
+  words came to mean nearly no food. Why: a barren square gives an "empty"
+  sample every time it is seen while it stays eaten, but a bush gives one
+  "food" sample when it regrows, and then its state (and word) ends. So any
+  pattern fed by both kinds of square leans hard toward empty. With the
+  random mentor that sent 3 seeds into long starvation in the bush world
+  (73–109 sleeps), because its words overrode the general pattern. The
+  same lean explains why the general pattern reads near 0 after every
+  upbringing here. Counting one sample per change instead of one per
+  sighting would remove it; that is a change to patterns, so it's not done
+  here.
+- **Earlier results shift slightly.** Hint and naming words now also teach
+  word patterns. On seeds 1–10 the mentor experiment moves by at most 1.5
+  sleeps over steps 1–4,000 (blind mentor 8 → 9.5).

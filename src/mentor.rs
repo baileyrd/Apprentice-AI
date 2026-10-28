@@ -11,6 +11,12 @@
 //!   square the apprentice is looking at, so the word gets its meaning from
 //!   the apprentice's own experience.
 //!
+//! - **Foretelling.** Right after the apprentice eats, a foretelling mentor
+//!   says one of two more words about the square: one when food will grow
+//!   back there, the other when it won't. They too mean nothing until the
+//!   apprentice sees what such squares become. A mentor that foretells at
+//!   random says either word, whatever will happen.
+//!
 //! The help fades like stabilisers on a bike: the chance of saying anything
 //! falls linearly to zero at `fade` steps.
 //!
@@ -22,7 +28,7 @@ use std::collections::{HashSet, VecDeque};
 use crate::body::{Observation, VIEW, Word};
 use crate::model::{KINDS, kind};
 use crate::rng::Rng;
-use crate::sim::Sim;
+use crate::sim::{Event, Outcome, Regrowth, Sim};
 use crate::world::{Cell, Dir, Grid, Pos};
 
 /// When and for how long the mentor helps.
@@ -34,7 +40,25 @@ pub struct Teaching {
     pub fade: u64,
     /// Whether it names what the apprentice is looking at.
     pub names: bool,
+    /// What it says about a square the apprentice has just eaten from.
+    pub foretells: Foretell,
 }
+
+/// What a mentor says about a square the apprentice has just eaten from.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Foretell {
+    /// Nothing.
+    #[default]
+    Never,
+    /// Its word for what will happen there.
+    Truly,
+    /// Either word, whatever will happen.
+    AtRandom,
+}
+
+/// Its word for "food grows back here", and for "it won't".
+pub const GROWS_BACK: Word = Word(KINDS as u8);
+pub const STAYS_GONE: Word = Word(KINDS as u8 + 1);
 
 impl Default for Teaching {
     fn default() -> Self {
@@ -42,6 +66,7 @@ impl Default for Teaching {
             stuck: 40,
             fade: 4_000,
             names: false,
+            foretells: Foretell::Never,
         }
     }
 }
@@ -113,8 +138,10 @@ impl Mentor {
     /// What it says this step: a square, relative to the apprentice's wake
     /// square, and a word about it; `None` when it stays quiet.
     pub fn say(&mut self, sim: &Sim) -> Option<(Pos, Word)> {
-        let Teaching { stuck, fade, names } = self.teaching;
-        if sim.t() >= fade || !self.rng.chance(1.0 - sim.t() as f64 / fade as f64) {
+        let Teaching {
+            stuck, fade, names, ..
+        } = self.teaching;
+        if !self.speaks(sim, fade) {
             return None;
         }
         let (at, word) = if sim.energy() < stuck {
@@ -128,6 +155,31 @@ impl Mentor {
         };
         let start = sim.start();
         Some((at.shift(-start.x, -start.y), word))
+    }
+
+    /// What it says after `outcome`: if the apprentice ate, the square it ate
+    /// from, relative to its wake square, and a word for what that square
+    /// will do; `None` otherwise or when it stays quiet.
+    pub fn foretell(&mut self, sim: &Sim, outcome: &Outcome) -> Option<(Pos, Word)> {
+        let how = self.teaching.foretells;
+        if outcome.event != Event::Ate || how == Foretell::Never {
+            return None;
+        }
+        if !self.speaks(sim, self.teaching.fade) {
+            return None;
+        }
+        let grows = match how {
+            Foretell::AtRandom => self.rng.chance(0.5),
+            _ => matches!(sim.config().regrowth, Regrowth::InPlace { .. }),
+        };
+        let word = if grows { GROWS_BACK } else { STAYS_GONE };
+        let start = sim.start();
+        Some((sim.pos().shift(-start.x, -start.y), word))
+    }
+
+    /// Whether it says anything this step: less often as `fade` nears.
+    fn speaks(&mut self, sim: &Sim, fade: u64) -> bool {
+        sim.t() < fade && self.rng.chance(1.0 - sim.t() as f64 / fade as f64)
     }
 
     /// The nearest square it believes holds food.
@@ -233,6 +285,63 @@ mod tests {
         let (at, _) = m.say(&s).expect("speaks early on");
         let start = s.start();
         assert_eq!(s.grid().get(at.shift(start.x, start.y)), Cell::Empty);
+    }
+
+    fn foretelling(foretells: Foretell) -> Mentor {
+        let teaching = Teaching {
+            fade: 1_000_000,
+            foretells,
+            ..Teaching::default()
+        };
+        Mentor::new(teaching, 0)
+    }
+
+    /// A small world with `regrowth` where the apprentice steps east onto
+    /// food and eats it; returns the world and the meal.
+    fn fed(regrowth: Regrowth) -> (Sim, Outcome) {
+        let mut grid = Grid::empty(5, 5);
+        grid.set(Pos { x: 2, y: 2 }, Cell::Food);
+        let config = Config {
+            regrowth,
+            ..Config::default()
+        };
+        let mut s = Sim::with_start(config, grid, Pos { x: 1, y: 2 }, Rng::new(0));
+        s.step(Action::Move(Dir::East));
+        let meal = s.step(Action::Eat);
+        (s, meal)
+    }
+
+    #[test]
+    fn it_foretells_what_an_eaten_square_will_do() {
+        for (regrowth, word) in [
+            (Regrowth::InPlace { delay: 30 }, GROWS_BACK),
+            (Regrowth::Anywhere, STAYS_GONE),
+        ] {
+            let (s, outcome) = fed(regrowth);
+            let mut m = foretelling(Foretell::Truly);
+            let start = s.start();
+            let at = s.pos().shift(-start.x, -start.y);
+            assert_eq!(m.foretell(&s, &outcome), Some((at, word)));
+        }
+    }
+
+    #[test]
+    fn it_foretells_only_after_a_meal_and_only_if_asked() {
+        let mut s = sim();
+        let rested = s.step(Action::Rest);
+        assert_eq!(foretelling(Foretell::Truly).foretell(&s, &rested), None);
+        let (s, ate) = fed(Regrowth::Anywhere);
+        assert_eq!(Mentor::new(Teaching::default(), 0).foretell(&s, &ate), None);
+    }
+
+    #[test]
+    fn a_random_foreteller_says_both_words_in_one_world() {
+        let (s, ate) = fed(Regrowth::Anywhere);
+        let mut m = foretelling(Foretell::AtRandom);
+        let words: HashSet<Word> = (0..50)
+            .filter_map(|_| m.foretell(&s, &ate).map(|(_, w)| w))
+            .collect();
+        assert_eq!(words, HashSet::from([GROWS_BACK, STAYS_GONE]));
     }
 
     #[test]
