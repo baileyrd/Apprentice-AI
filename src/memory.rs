@@ -44,12 +44,22 @@
 //! says about a square joins its state, with the voice that said it, so
 //! patterns can learn what the word
 //! foretells ([`WorldModel::hear`]).
+//!
+//! **Active memory and the gate** (off unless [`Recall::gate`] is set).
+//! Every sighting goes first into active memory: the few squares seen most
+//! recently, which answer predictions before the diary. Only sightings that
+//! long-term memory (patterns, else the map in use) did not see coming are
+//! written into the diary: squares it does not know, squares whose error
+//! against long-term's guess is above the gate's threshold, and squares it
+//! ate from that are waiting to grow back. The rest leave a confirmation:
+//! in sleep a confirmed square is rehearsed (it does not fade, and grows
+//! stiffer) without being replayed.
 
 use std::collections::{HashMap, HashSet};
 
 use crate::body::{Observation, Said, VIEW, Voice};
 use crate::model::{Belief, PredictiveCoding, Rates, WorldModel, error, most_likely, one_hot};
-use crate::patterns::{Last, Patterns};
+use crate::patterns::{Last, Patterns, group_start};
 use crate::world::{Cell, Pos};
 
 /// How the memory consolidates, forgets and recognises contexts.
@@ -82,6 +92,42 @@ pub struct Recall {
     pub pattern_rate: f64,
     /// Samples a pattern needs before it predicts.
     pub pattern_min: u32,
+    /// Active memory's gate to the diary; `None` writes every sighting.
+    pub gate: Option<Gate>,
+}
+
+/// What active memory lets through to the diary.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Gate {
+    /// A sighting whose error against long-term's guess is above this is
+    /// "surprising", and written.
+    pub threshold: f64,
+    /// Squares active memory holds; the oldest drops out.
+    pub span: usize,
+}
+
+impl Default for Gate {
+    fn default() -> Self {
+        Self {
+            threshold: 0.05,
+            span: 2 * VIEW * VIEW,
+        }
+    }
+}
+
+/// Counts of what memory did with its sightings.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Traffic {
+    pub sightings: u64,
+    /// Sightings written into the diary.
+    pub written: u64,
+    /// Naps forced by a full diary.
+    pub naps: u64,
+    /// Sightings of a square long-term memory knew, where its most likely
+    /// kind was not what was seen.
+    pub unexpected: u64,
+    /// Those written into the diary.
+    pub unexpected_written: u64,
 }
 
 impl Default for Recall {
@@ -98,6 +144,7 @@ impl Default for Recall {
             patterns: true,
             pattern_rate: 0.05,
             pattern_min: 20,
+            gate: None,
         }
     }
 }
@@ -128,6 +175,8 @@ impl Seen {
 pub enum Source {
     /// A pattern: how squares like it change (a bush grows back).
     Pattern,
+    /// Active memory: seen a moment ago (with the gate on).
+    Active,
     /// The diary: seen since it last slept.
     Diary,
     /// The map in use: consolidated in sleep.
@@ -139,6 +188,10 @@ pub enum Source {
 /// A sighting in the diary, with the square's state, that state's age and
 /// its word just before it.
 type Sighting = (Pos, Cell, Option<(Last, u64, Option<Said>)>);
+
+/// A sighting that confirmed a pattern: the square's state, the start of
+/// its age group, any word said, and what was seen.
+type Confirmation = (Last, u64, Option<Said>, Cell);
 
 /// One slow map and what memory keeps about it.
 #[derive(Debug, Clone)]
@@ -201,6 +254,15 @@ pub struct Memory {
     /// Diary and meal entries made before the doubt began.
     doubt: (usize, usize),
     patterns: Patterns,
+    /// Active memory, with the gate on: the squares seen most recently,
+    /// oldest first.
+    working: Vec<(Pos, Belief)>,
+    /// Known squares seen as expected since the last sleep, not written.
+    confirmed: HashSet<Pos>,
+    /// Those sightings counted by the pattern they confirm: state, age
+    /// group, word, and what was seen.
+    tally: HashMap<Confirmation, u32>,
+    traffic: Traffic,
 }
 
 impl Memory {
@@ -225,6 +287,65 @@ impl Memory {
             lost_since: 0,
             doubt: (0, 0),
             patterns: Patterns::new(recall.pattern_rate, recall.pattern_min),
+            working: Vec::new(),
+            confirmed: HashSet::new(),
+            tally: HashMap::new(),
+            traffic: Traffic::default(),
+        }
+    }
+
+    /// What it did with its sightings so far.
+    pub fn traffic(&self) -> Traffic {
+        self.traffic
+    }
+
+    /// Active memory's belief about `at`, if it holds the square.
+    fn in_mind(&self, at: Pos) -> Option<Belief> {
+        self.working
+            .iter()
+            .rev()
+            .find(|(p, _)| *p == at)
+            .map(|(_, b)| *b)
+    }
+
+    /// Puts `at` in active memory as the most recent square.
+    fn hold(&mut self, at: Pos, belief: Belief, span: usize) {
+        self.working.retain(|(p, _)| *p != at);
+        self.working.push((at, belief));
+        if self.working.len() > span {
+            self.working.remove(0);
+        }
+    }
+
+    /// Long-term memory's guess about a square in state `before`: patterns,
+    /// else the map in use; `None` if it knows neither.
+    fn long_term(&self, at: Pos, before: Option<Seen>) -> Option<Belief> {
+        let pattern = before
+            .filter(|_| self.recall.patterns)
+            .and_then(|s| self.patterns.predict(s.last, self.t - s.since, s.said));
+        let map = &self.contexts[self.active].map;
+        pattern.or_else(|| map.knows(at).then(|| map.predict(at)))
+    }
+
+    /// Whether the gate writes a sighting into the diary.
+    fn admits(&self, guess: Option<Belief>, before: Option<Seen>, sensed: Cell) -> bool {
+        let Some(gate) = self.recall.gate else {
+            return true;
+        };
+        let Some(guess) = guess else {
+            return true;
+        };
+        let at_stake = before.is_some_and(|s| s.last == Last::Ate);
+        at_stake || error(&guess, sensed) > gate.threshold
+    }
+
+    fn count(&mut self, guess: Option<Belief>, sensed: Cell, written: bool) {
+        let t = &mut self.traffic;
+        t.sightings += 1;
+        t.written += u64::from(written);
+        if guess.is_some_and(|g| most_likely(&g) != Some(sensed)) {
+            t.unexpected += 1;
+            t.unexpected_written += u64::from(written);
         }
     }
 
@@ -253,6 +374,9 @@ impl Memory {
     pub fn explain(&self, at: Pos) -> (Belief, Source) {
         if let Some(b) = self.anticipate(at) {
             return (b, Source::Pattern);
+        }
+        if let Some(b) = self.in_mind(at) {
+            return (b, Source::Active);
         }
         if let Some(b) = self.fast.get(&at) {
             return (*b, Source::Diary);
@@ -321,6 +445,14 @@ impl Memory {
     fn consolidate(&mut self) {
         let elapsed = (self.t - self.last_sleep) as f64;
         let (d, m) = self.settled();
+        if self.recall.patterns {
+            // Confirmations first, so today's surprises stay the most recent.
+            for (&(last, age, said, sensed), &n) in &self.tally {
+                for _ in 0..n {
+                    self.patterns.learn(last, age, said, sensed);
+                }
+            }
+        }
         let ctx = &mut self.contexts[self.active];
         let mut rehearsed = HashSet::new();
         for &(at, sensed, before) in &self.diary[..d] {
@@ -338,6 +470,11 @@ impl Memory {
                 ctx.map.learn(at, Cell::Food);
             }
         }
+        for &at in &self.confirmed {
+            if rehearsed.insert(at) {
+                *ctx.stiffness.entry(at).or_insert(0) += 1;
+            }
+        }
         let faded: Vec<Pos> = ctx.map.known().filter(|p| !rehearsed.contains(p)).collect();
         for at in faded {
             let stiff = f64::from(ctx.stiffness.get(&at).copied().unwrap_or(0));
@@ -348,6 +485,9 @@ impl Memory {
         self.meals.drain(..m);
         self.doubt = (0, 0);
         self.fast.clear();
+        self.working.clear();
+        self.confirmed.clear();
+        self.tally.clear();
         self.last_sleep = self.t;
     }
 
@@ -436,6 +576,7 @@ impl WorldModel for Memory {
         self.t += 1;
         self.reconsider(obs.view.len());
         if self.diary.len() >= self.recall.capacity * obs.view.len() {
+            self.traffic.naps += 1;
             self.consolidate();
         }
         surprise / squares
@@ -447,17 +588,30 @@ impl WorldModel for Memory {
         let target = one_hot(sensed);
         let fast =
             std::array::from_fn(|k| predicted[k] + self.sensory * (target[k] - predicted[k]));
-        self.fast.insert(at, fast);
         let t = self.t;
-        let seen = &mut self.contexts[self.active].seen;
-        let before = seen.get(&at).copied();
+        let before = self.contexts[self.active].seen.get(&at).copied();
+        let guess = self.long_term(at, before);
+        let written = self.admits(guess, before, sensed);
+        self.count(guess, sensed, written);
+        if let Some(gate) = self.recall.gate {
+            self.hold(at, fast, gate.span);
+        }
+        if written {
+            self.fast.insert(at, fast);
+            self.diary
+                .push((at, sensed, before.map(|s| (s.last, t - s.since, s.said))));
+        } else {
+            self.confirmed.insert(at);
+            if let Some(s) = before {
+                let key = (s.last, group_start(t - s.since), s.said, sensed);
+                *self.tally.entry(key).or_insert(0) += 1;
+            }
+        }
         let next = match before {
             Some(s) if s.last.looks() == sensed => Seen { sensed: t, ..s },
             _ => Seen::new(Last::Saw(sensed), t),
         };
-        seen.insert(at, next);
-        self.diary
-            .push((at, sensed, before.map(|s| (s.last, t - s.since, s.said))));
+        self.contexts[self.active].seen.insert(at, next);
         let rate = self.recall.fit_rate;
         // A bush it ate from is judged by when it should grow back, not by
         // the map: an expected change is no sign of being somewhere else.
@@ -481,7 +635,7 @@ impl WorldModel for Memory {
     }
 
     fn believes(&self, at: Pos) -> Option<Cell> {
-        if let Some(b) = self.anticipate(at) {
+        if let Some(b) = self.anticipate(at).or_else(|| self.in_mind(at)) {
             return most_likely(&b);
         }
         match self.fast.get(&at) {
@@ -856,6 +1010,110 @@ mod tests {
         }
         assert!(rises[0] > 0.02, "without patterns: {}", rises[0]);
         assert!(rises[1] < 0.01, "with patterns: {}", rises[1]);
+    }
+
+    fn gated(span: usize) -> Memory {
+        Memory::new(
+            Rates::default(),
+            Recall {
+                capacity: 1_000,
+                patterns: false,
+                gate: Some(Gate {
+                    threshold: 0.1,
+                    span,
+                }),
+                ..Recall::default()
+            },
+        )
+    }
+
+    /// Learns the corner well enough that the map is sure of it.
+    fn knows_the_corner(m: &mut Memory) {
+        for _ in 0..5 {
+            for _ in 0..10 {
+                m.observe(&at(ORIGIN, corner()));
+            }
+            m.sleep();
+        }
+    }
+
+    #[test]
+    fn the_gate_writes_what_long_term_memory_did_not_know() {
+        let mut m = gated(18);
+        m.observe(&at(ORIGIN, corner()));
+        assert_eq!(m.traffic().written, 9, "unknown squares all pass");
+    }
+
+    #[test]
+    fn what_was_expected_leaves_only_a_confirmation() {
+        let mut m = gated(18);
+        knows_the_corner(&mut m);
+        let nw = Pos { x: -1, y: -1 };
+        let stiff = m.contexts[0].stiffness[&nw];
+        m.observe(&at(ORIGIN, corner()));
+        assert!(m.diary.is_empty(), "expected sightings written");
+        assert_eq!(
+            m.explain(nw),
+            (m.in_mind(nw).expect("held"), Source::Active)
+        );
+        m.sleep();
+        assert_eq!(m.contexts[0].stiffness[&nw], stiff + 1);
+        assert_eq!(m.believes(nw), Some(Cell::Wall));
+    }
+
+    #[test]
+    fn a_change_is_written_and_counted() {
+        let mut m = gated(18);
+        knows_the_corner(&mut m);
+        let before = m.traffic();
+        m.observe(&at(ORIGIN, [Cell::Empty; VIEW * VIEW])); // the wall is gone
+        let t = m.traffic();
+        assert_eq!(t.written - before.written, 1);
+        assert_eq!(t.unexpected - before.unexpected, 1);
+        assert_eq!(t.unexpected_written - before.unexpected_written, 1);
+        assert_eq!(m.diary.len(), 1);
+    }
+
+    #[test]
+    fn a_square_it_ate_from_is_always_written() {
+        let mut m = gated(18);
+        knows_the_corner(&mut m);
+        m.fed(ORIGIN);
+        m.observe(&at(ORIGIN, corner()));
+        assert_eq!(m.diary.len(), 1, "only the eaten square");
+        assert_eq!(m.diary[0].0, ORIGIN);
+    }
+
+    #[test]
+    fn active_memory_holds_only_its_span() {
+        let mut m = gated(4);
+        m.observe(&at(ORIGIN, corner()));
+        assert_eq!(m.working.len(), 4);
+        let last = Pos { x: 1, y: 1 };
+        assert!(m.in_mind(last).is_some(), "the most recent square dropped");
+        assert!(m.in_mind(Pos { x: -1, y: -1 }).is_none());
+    }
+
+    #[test]
+    fn confirmations_still_teach_the_patterns_they_confirm() {
+        let mut m = gated(18);
+        m.recall.patterns = true;
+        knows_the_corner(&mut m);
+        let before = m.patterns.clone();
+        m.observe(&at(ORIGIN, corner()));
+        assert!(m.diary.is_empty() && !m.tally.is_empty());
+        m.sleep();
+        assert_ne!(m.patterns, before, "confirmations taught nothing");
+        assert!(m.tally.is_empty());
+    }
+
+    #[test]
+    fn without_a_gate_every_sighting_is_written() {
+        let mut m = no_naps(false);
+        knows_the_corner(&mut m);
+        m.observe(&at(ORIGIN, corner()));
+        assert_eq!(m.diary.len(), 9);
+        assert!(m.working.is_empty() && m.confirmed.is_empty());
     }
 
     #[test]

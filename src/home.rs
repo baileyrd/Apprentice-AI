@@ -68,14 +68,24 @@ pub fn step(sim: &mut Sim, mind: &mut Learner) {
 
 /// A fresh apprentice and its home, before it has lived there.
 pub fn newborn(seed: u64) -> Result<(Learner, Sim), SimError> {
-    let memory = Memory::new(Rates::default(), Recall::default());
+    newborn_with(Recall::default(), seed)
+}
+
+/// The same, with memory set by `recall`.
+pub fn newborn_with(recall: Recall, seed: u64) -> Result<(Learner, Sim), SimError> {
+    let memory = Memory::new(Rates::default(), recall);
     let mind = Apprentice::with_model(Drives::default(), memory, seed);
     Ok((mind, Sim::new(config(), seed)?))
 }
 
 /// A life at home: the mind, the home as it left it, and its home map.
 pub fn at_home(seed: u64) -> Result<(Learner, Sim, Option<usize>), SimError> {
-    let (mut mind, mut sim) = newborn(seed)?;
+    at_home_with(Recall::default(), seed)
+}
+
+/// The same, with memory set by `recall`.
+pub fn at_home_with(recall: Recall, seed: u64) -> Result<(Learner, Sim, Option<usize>), SimError> {
+    let (mut mind, mut sim) = newborn_with(recall, seed)?;
     for _ in 0..HOME_STEPS {
         step(&mut sim, &mut mind);
     }
