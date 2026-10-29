@@ -1,0 +1,11 @@
+1. network vs map, new world +758% [+727%, +790%]: missed
+2. network vs no hidden layer, new world -16% [-16%, -15%]: missed
+3. network vs backprop, new world -0% [-1%, -0%]: met
+4. a bump unit (AUC >= 0.9) in 16/200 seeds [0.05, 0.12]: missed
+Reported only (mean total surprise over 200 steps):
+                map: new world 4.5, first world's last steps 0.2
+            network: new world 46.3, first world's last steps 33.6
+    no hidden layer: new world 55.0, first world's last steps 45.5
+           backprop: new world 46.4, first world's last steps 33.5
+   energy prediction error (meals², network): first world 0.0042, new world 0.0047
+   best bump unit, mean AUC: 0.800
