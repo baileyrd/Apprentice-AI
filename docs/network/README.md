@@ -122,3 +122,80 @@ My guess before running: rules 1 and 2 met by a wide margin (around −50%),
 rule 3 met, and rule 4 the most likely miss, since a random body bumps on
 only about one move in five and the unit that handles it may be spread over
 several.
+
+## Tuning (seeds 101–110)
+
+- **Plain predictive coding learned no more than no hidden layer.** With
+  every layer's error weighted the same, settling lets the hidden units
+  soak up most of the output's error, so little is left to teach the
+  weights. On a 30,000-step first world, backprop got its surprise down to
+  12.7 while the network stayed at 36, the same as no hidden layer.
+  **Change:** each hidden layer weighs its own error by a *precision*
+  (how firmly it holds to what the layer below predicts). With a high
+  precision the output's error is passed down in proportion, and the
+  network learns as backprop does, still with only local updates. A unit
+  test checks this. Chosen: precision 100.
+- **Size and rate.** 16, 32 and 64 hidden units at rates 0.05 and 0.1.
+  Chosen: **64 units, rate 0.05**, the lowest new-world surprise for the
+  network. A rate of 0.1 would have met rule 2 (−42%), but only because
+  that rate makes the no-hidden-layer learner much worse (85.8, up from
+  56.1). The network itself did worse at 0.1, so it was not chosen.
+
+## Results (seeds 1–100 and 111–210, one run)
+
+`cargo run --release --bin network -- --judge` prints the verdicts
+([judging.txt](judging.txt)) and writes [network.csv](network.csv).
+
+| Rule | Result | Verdict |
+|---|---|---|
+| 1. Network ≥ 25% below today's map, new world | +758% [+727%, +790%] | **missed** |
+| 2. Network ≥ 25% below no hidden layer | −16% [−16%, −15%] | **missed** |
+| 3. Network at most 10% above backprop | −0% [−1%, −0%] | **met** |
+| 4. A single bump unit in ≥ 80% of seeds | 16 of 200 (8%) | **missed** |
+
+Mean total "surprise" over 200 steps:
+
+| Learner | New world, first 200 steps | First world, last 200 steps |
+|---|--:|--:|
+| Today's map | 4.5 | 0.2 |
+| Network (predictive coding) | 46.3 | 33.6 |
+| No hidden layer | 55.0 | 45.5 |
+| Backprop | 46.4 | 33.5 |
+
+The network's energy prediction is close: its squared error is 0.005
+(in meals²), so it is typically off by about 0.07 of a meal.
+
+## What it shows
+
+- **My first rule was built on a wrong guess.** I expected the map to
+  know little in a new world. It knows almost everything almost at once.
+  In a 12×12 world, six of the nine squares in the next view are in view
+  now, and a wandering body sees the other three within a few steps. The
+  map remembers each square it has seen, so it is right about the next
+  view almost every time, even in its first 200 steps somewhere new. A
+  network that only knows "how the world works", and nothing about
+  places, cannot match that. Predicting the next view rewards memory of
+  places, not understanding.
+- **Hidden layers help, but 3,000 steps is too little.** The network
+  beats no hidden layer by 16%, not 25%. With ten times the steps,
+  backprop reaches a surprise of 12.7, near what is possible (the squares
+  it has not seen yet can only be guessed). So the shape can learn the
+  physics; one life of 3,000 random steps is not enough data.
+- **Local learning matches backprop**, once each hidden layer has a
+  precision. That is the one rule met. It also says the shortfall is
+  data and task, not the learning rule.
+- **No single "bump" unit.** The best single unit separates bumps from
+  moves with an area under the curve of 0.80 on average. The knowledge is
+  spread over several units, as I guessed it might be. Reading it will
+  need the concept layer, not one unit at a time.
+- **Part of what it learns is the first world.** Its surprise is higher in
+  the new world (46) than at the end of the first (34), and 800 steps in
+  it is still around 40. Some of what it learned is that world's layout
+  statistics, not physics.
+
+**Where this points.** The network should not compete with the map on
+what the map does well (where things are). It should cover what the map
+cannot: squares it has never seen, and what actions do. That means
+combining them, with the network as the map's prior, behind the gate.
+That is the next slice to plan. Separately, the tests need a body that
+lives longer than 3,000 random steps, or one that moves with purpose.
