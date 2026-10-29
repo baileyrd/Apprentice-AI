@@ -145,6 +145,10 @@ impl Sim {
         }
     }
 
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
     pub fn grid(&self) -> &Grid {
         &self.grid
     }

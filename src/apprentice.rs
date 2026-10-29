@@ -25,7 +25,7 @@ use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use crate::agent::Agent;
-use crate::body::{Action, Observation, Word};
+use crate::body::{Action, Observation, Said, Word};
 use crate::model::{Belief, KINDS, PredictiveCoding, Rates, WorldModel, error, kind, one_hot};
 use crate::rng::Rng;
 use crate::sim::Outcome;
@@ -194,10 +194,11 @@ impl<M: WorldModel> Apprentice<M> {
         }
     }
 
-    /// A mentor says `word` about the square at `at` (relative to the wake
+    /// A mentor says `said` about the square at `at` (relative to the wake
     /// square).
-    pub fn hear(&mut self, at: Pos, word: Word) {
-        self.told.insert(at, word);
+    pub fn hear(&mut self, at: Pos, said: Said) {
+        self.told.insert(at, said.word);
+        self.model.hear(at, said);
     }
 
     /// What `word` has turned out to mean; `None` if never checked.
@@ -622,19 +623,22 @@ mod tests {
         );
     }
 
-    const FOOD_WORD: Word = Word(7);
+    const FOOD_WORD: Said = Said {
+        voice: crate::body::Voice(0),
+        word: Word(7),
+    };
 
     #[test]
     fn a_word_means_what_was_seen_where_it_was_said() {
         let mut a = taught(0.0);
-        assert_eq!(a.meaning(FOOD_WORD), None);
+        assert_eq!(a.meaning(FOOD_WORD.word), None);
         let mut view = [Cell::Empty; VIEW * VIEW];
         view[5] = Cell::Food; // east
         for _ in 0..10 {
             a.hear(Pos { x: 1, y: 0 }, FOOD_WORD);
             a.act(&obs(view, 95));
         }
-        let m = a.meaning(FOOD_WORD).expect("checked");
+        let m = a.meaning(FOOD_WORD.word).expect("checked");
         assert!(m[kind(Cell::Food)] > 0.85, "{m:?}");
         assert!(a.told.is_empty());
     }
@@ -644,14 +648,14 @@ mod tests {
         let mut a = taught(0.0);
         a.hear(Pos { x: 5, y: 0 }, FOOD_WORD);
         a.act(&open(20));
-        assert_eq!(a.meaning(FOOD_WORD), None);
-        assert_eq!(a.told.get(&Pos { x: 5, y: 0 }), Some(&FOOD_WORD));
+        assert_eq!(a.meaning(FOOD_WORD.word), None);
+        assert_eq!(a.told.get(&Pos { x: 5, y: 0 }), Some(&FOOD_WORD.word));
     }
 
     #[test]
     fn a_hungry_apprentice_follows_a_word_it_knows() {
         let mut a = taught(0.0);
-        a.lexicon.insert(FOOD_WORD, one_hot(Cell::Food));
+        a.lexicon.insert(FOOD_WORD.word, one_hot(Cell::Food));
         a.hear(Pos { x: 0, y: -4 }, FOOD_WORD);
         assert_eq!(a.act(&open(20)), Action::Move(Dir::North));
     }
