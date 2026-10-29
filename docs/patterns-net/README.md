@@ -103,3 +103,45 @@ Means, table → network: bush sleeps 22.7 → 14.2, bush meals 246 → 279
   wrong answer per three seeds. The home test judges eaten bushes by
   pattern regrowth (PR #11), so a different regrowth belief changes which
   map fits; which trials flipped is not yet looked at.
+
+## Looking into the home test (after PR #21)
+
+Seeds 1–30 (part of the judging set, so these are diagnoses, not verdicts),
+5 trials each, answers read after 100 steps:
+
+- **Every extra wrong answer is a stranger taken for home.** Home and home
+  with a wall moved are always answered right, both ways. Over the 200
+  judging seeds, strangers taken for home: table 66 of 600, network 110 of
+  600.
+- **Not a less sure home map.** The network apprentice's home map is a
+  little surer (mean top belief 0.978 against 0.962) over the same number
+  of squares.
+- **Not exploring less.** In strangers it stands still on 6 of 100 steps
+  (table 7.8) and sees as many squares (61 against 62).
+- **Not sleeping more.** It does run out of energy more often in strangers
+  (115 against 68 times over 90 trials), but wrong answers are no more
+  common in trials with a sleep than without.
+- **Partly the regrowth judging.** A bush it ate from is judged by when it
+  should grow back, not by the map (PR #11). Switching that off inside the
+  trials only: table 5 wrong, network 9 (from 5 and 14), and each makes
+  one mistake on home with a wall moved. About half the gap, on few trials.
+  The network's guesses are softer (0.84 food at age 32, table 0.97), so
+  a guess about a stranger's square can match what is seen more often.
+- **A fix that failed.** Judging map fit only on fresh glances (squares not
+  in view the step before) missed far more strangers (3–5 of 10 per
+  stranger slot on seeds 101–110, against 1–3), even with "settle" scaled
+  down to 75–150; it was reverted.
+
+## Network on by default (PR #22)
+
+`Recall::default()` now holds the patterns in the network (64 units, rate
+0.2). The comparison that judges this switch is the one above: today's
+default against the network, the same settings, the same seeds, so it was
+not run again. Its verdicts stand: false hopes −85%, bush and barren sleeps
+level, learns sooner missed, home-test wrong answers +13% (unclear), the
+cost being strangers taken for home (about 18% of stranger trials against
+11%). `patterns_net` still compares against the table, set explicitly.
+
+Unit tests of patterns in memory now teach 300 meals, not 40: the network
+shares what it learns across ages and needs more meals to settle than one
+table entry does.

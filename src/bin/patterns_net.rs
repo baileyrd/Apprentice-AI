@@ -140,7 +140,10 @@ fn report(rows: &[(u64, Life, Life)]) -> Result<(), Error> {
 }
 
 fn execute(args: &Args) -> Result<(), Error> {
-    let table = Recall::default();
+    let table = Recall {
+        pattern_net: None,
+        ..Recall::default()
+    };
     let net = Recall {
         pattern_net: Some(args.net),
         ..table
