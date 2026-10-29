@@ -41,12 +41,13 @@
 //! changed and how long ago. They refine the diary's beliefs about squares
 //! seen today: a bush eaten an hour ago is expected to have grown back, in a
 //! world where the apprentice has never seen that bush grow. A word a mentor
-//! says about a square joins its state, so patterns can learn what the word
+//! says about a square joins its state, with the voice that said it, so
+//! patterns can learn what the word
 //! foretells ([`WorldModel::hear`]).
 
 use std::collections::{HashMap, HashSet};
 
-use crate::body::{Observation, VIEW, Word};
+use crate::body::{Observation, Said, VIEW, Voice};
 use crate::model::{Belief, PredictiveCoding, Rates, WorldModel, error, most_likely, one_hot};
 use crate::patterns::{Last, Patterns};
 use crate::world::{Cell, Pos};
@@ -108,7 +109,7 @@ struct Seen {
     last: Last,
     since: u64,
     sensed: u64,
-    word: Option<Word>,
+    said: Option<Said>,
 }
 
 impl Seen {
@@ -117,7 +118,7 @@ impl Seen {
             last,
             since: t,
             sensed: t,
-            word: None,
+            said: None,
         }
     }
 }
@@ -137,7 +138,7 @@ pub enum Source {
 
 /// A sighting in the diary, with the square's state, that state's age and
 /// its word just before it.
-type Sighting = (Pos, Cell, Option<(Last, u64, Option<Word>)>);
+type Sighting = (Pos, Cell, Option<(Last, u64, Option<Said>)>);
 
 /// One slow map and what memory keeps about it.
 #[derive(Debug, Clone)]
@@ -235,7 +236,7 @@ impl Memory {
         }
         let seen = self.contexts[self.active].seen.get(&at)?;
         self.patterns
-            .predict(seen.last, self.t - seen.since, seen.word)
+            .predict(seen.last, self.t - seen.since, seen.said)
     }
 
     /// Index of the map in use.
@@ -299,10 +300,15 @@ impl Memory {
     }
 
     /// What its patterns say a square in state `last`, `age` steps old, that
-    /// it was told `word` about, is now; `None` until that word's pattern is
-    /// learned.
-    pub fn foretold(&self, last: Last, age: u64, word: Word) -> Option<Belief> {
-        self.patterns.foretold(last, age, word)
+    /// it was told `said` about, is now, by that word's pattern alone; `None`
+    /// until it is learned.
+    pub fn foretold(&self, last: Last, age: u64, said: Said) -> Option<Belief> {
+        self.patterns.foretold(last, age, said)
+    }
+
+    /// How far it believes words in `voice`, from 0 to 1.
+    pub fn trust(&self, voice: Voice) -> f64 {
+        self.patterns.trust(voice)
     }
 
     /// How it consolidates, forgets and recognises contexts.
@@ -323,8 +329,8 @@ impl Memory {
             }
             ctx.map.learn(at, sensed);
             rehearsed.insert(at);
-            if let (true, Some((last, age, word))) = (self.recall.patterns, before) {
-                self.patterns.learn(last, age, word, sensed);
+            if let (true, Some((last, age, said))) = (self.recall.patterns, before) {
+                self.patterns.learn(last, age, said, sensed);
             }
         }
         for &at in &self.meals[..m] {
@@ -451,7 +457,7 @@ impl WorldModel for Memory {
         };
         seen.insert(at, next);
         self.diary
-            .push((at, sensed, before.map(|s| (s.last, t - s.since, s.word))));
+            .push((at, sensed, before.map(|s| (s.last, t - s.since, s.said))));
         let rate = self.recall.fit_rate;
         // A bush it ate from is judged by when it should grow back, not by
         // the map: an expected change is no sign of being somewhere else.
@@ -464,7 +470,7 @@ impl WorldModel for Memory {
             };
             let expected = state
                 .filter(|s| on && s.last == Last::Ate)
-                .and_then(|s| patterns.predict(s.last, t - s.since, s.word));
+                .and_then(|s| patterns.predict(s.last, t - s.since, s.said));
             ctx.judge(at, sensed, rate, expected);
         }
         surprise
@@ -494,9 +500,9 @@ impl WorldModel for Memory {
         self.contexts[self.active].seen.insert(at, ate);
     }
 
-    fn hear(&mut self, at: Pos, word: Word) {
+    fn hear(&mut self, at: Pos, said: Said) {
         if let Some(seen) = self.contexts[self.active].seen.get_mut(&at) {
-            seen.word = Some(word);
+            seen.said = Some(said);
         }
     }
 
@@ -512,6 +518,13 @@ mod tests {
     use crate::model::kind;
 
     const ORIGIN: Pos = Pos { x: 0, y: 0 };
+
+    fn said(word: u8) -> Said {
+        Said {
+            voice: Voice(0),
+            word: crate::body::Word(word),
+        }
+    }
 
     fn memory() -> Memory {
         Memory::new(Rates::default(), Recall::default())
@@ -548,7 +561,7 @@ mod tests {
 
     #[test]
     fn a_word_holds_until_the_square_changes_and_teaches_its_pattern() {
-        let word = Word(9);
+        let word = said(9);
         let mut m = Memory::new(
             Rates::default(),
             Recall {
@@ -562,19 +575,19 @@ mod tests {
         m.fed(ORIGIN);
         m.hear(ORIGIN, word);
         m.observe(&at(ORIGIN, [Cell::Empty; VIEW * VIEW]));
-        assert_eq!(m.contexts[0].seen[&ORIGIN].word, Some(word));
+        assert_eq!(m.contexts[0].seen[&ORIGIN].said, Some(word));
         m.observe(&at(ORIGIN, food)); // grown back: a new state, no word
-        assert_eq!(m.contexts[0].seen[&ORIGIN].word, None);
+        assert_eq!(m.contexts[0].seen[&ORIGIN].said, None);
         m.sleep();
         let told = m.foretold(Last::Ate, 1, word).expect("learned");
         assert!(told[kind(Cell::Food)] > told[kind(Cell::Wall)]);
-        assert_eq!(m.foretold(Last::Ate, 1, Word(8)), None);
+        assert_eq!(m.foretold(Last::Ate, 1, said(8)), None);
     }
 
     #[test]
     fn a_word_about_an_unseen_square_is_dropped() {
         let mut m = memory();
-        m.hear(Pos { x: 9, y: 9 }, Word(9));
+        m.hear(Pos { x: 9, y: 9 }, said(9));
         assert!(!m.contexts[0].seen.contains_key(&Pos { x: 9, y: 9 }));
     }
 
