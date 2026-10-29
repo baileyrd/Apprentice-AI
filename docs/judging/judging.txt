@@ -1,0 +1,54 @@
+Interval width for bush sleeps (want at most 0.30):
+   50 seeds: true mentor vs none 0.215, elder vs alone 0.422
+  100 seeds: true mentor vs none 0.145, elder vs alone 0.303
+  200 seeds: true mentor vs none 0.105, elder vs alone 0.214
+Do-nothing change called 'at least 15% fewer bush sleeps': old 44%, new 0.0%; new interval leaves out no change in 5%
+Met/missed flips between seeds 2001-2100 and 2101-2200: 0 of 11 rules (old method between two groups of 10 seeds: 2.9 on average)
+
+Judging seeds: 200 (1-210)
+
+Language (#14)
+  1. Words learned in at least 90% of seeds                                        was missed (7/10)              old on 1-10: missed   new: missed
+  2. Futile returns at least 50% below no mentor                                   was missed (+7%)               old on 1-10: missed   new: missed
+  3. Bush sleeps no more than 10% above no mentor                                  was met (-41%)                 old on 1-10: met      new: met
+  4. Random mentor's futile returns no more than 10% above                         was missed (+33%)              old on 1-10: missed   new: unclear
+
+Trust (#16)
+  1. Honest trust 0.3 above random in at least 90% of seeds                        was missed (4/10)              old on 1-10: missed   new: missed
+  2. Two voices: false hopes at most 2; bush sleeps within 10% of honest alone     was missed (6.5; 9.5 vs 4.5)   old on 1-10: missed   new: missed
+  3. Two voices: false hopes at least 50% below one voice                          was met (-61%)                 old on 1-10: met      new: missed
+  4. No language-test sleeps more than 10% above the code before                   was met                        old on 1-10: met      new: unclear
+
+Peers (#17)
+  1. Together: false hopes -25%, bush sleeps -15%                                  was missed (-22%; +35%)        old on 1-10: missed   new: missed
+  2. Elder: false hopes -50%, bush sleeps -25%                                     was missed (-11%; +18%)        old on 1-10: missed   new: missed
+  3. Sibling elder 30% below stranger on one measure, within 10% on the other      was missed (-11%; -23%)        old on 1-10: missed   new: missed
+  4. No condition's sleeps more than 10% above alone                               was missed (11.5, 13 vs 8.5)   old on 1-10: missed   new: unclear
+
+Typical changes on the judging seeds, with 90% intervals:
+  #14 true mentor vs none: futile returns                 -4%  [-14%, +7%]
+  #14 true mentor vs none: false hopes                   -89%  [-91%, -87%]
+  #14 true mentor vs none: bush sleeps                   -57%  [-62%, -51%]
+  #14 random mentor vs none: futile returns              +23%  [+9%, +39%]
+  #14 random mentor vs none: bush sleeps                 +43%  [+26%, +63%]
+  #16 two voices vs honest alone: bush sleeps            +66%  [+50%, +84%]
+  #16 two voices vs one voice: false hopes               -30%  [-44%, -12%]
+  #16 two voices vs one voice: bush sleeps               -27%  [-35%, -17%]
+  #16 vs #14 code, no mentor: barren_sleeps               +0%  [+0%, +0%]
+  #16 vs #14 code, no mentor: bush_sleeps                 +0%  [+0%, +0%]
+  #16 vs #14 code, true mentor: barren_sleeps             +1%  [-0%, +2%]
+  #16 vs #14 code, true mentor: bush_sleeps               +3%  [-5%, +12%]
+  #16 vs #14 code, random mentor: barren_sleeps           -0%  [-2%, +1%]
+  #16 vs #14 code, random mentor: bush_sleeps            -26%  [-35%, -17%]
+  #17 together vs alone: barren_hopes                    +12%  [-13%, +42%]
+  #17 together vs alone: barren_sleeps                    +1%  [+0%, +2%]
+  #17 together vs alone: bush_sleeps                     +11%  [-1%, +24%]
+  #17 elder ahead vs alone: barren_hopes                  -2%  [-23%, +25%]
+  #17 elder ahead vs alone: barren_sleeps                 +1%  [-1%, +2%]
+  #17 elder ahead vs alone: bush_sleeps                   -4%  [-15%, +8%]
+  #17 stranger ahead vs alone: barren_hopes               -1%  [-1%, +0%]
+  #17 stranger ahead vs alone: barren_sleeps              +1%  [+0%, +2%]
+  #17 stranger ahead vs alone: bush_sleeps               +15%  [+9%, +21%]
+  #17 elder vs stranger: barren_hopes                     -2%  [-23%, +25%]
+  #17 elder vs stranger: bush_sleeps                     -17%  [-26%, -6%]
+  #16 two voices: median false hopes 11.0
