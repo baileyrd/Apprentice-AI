@@ -15,6 +15,7 @@ pub mod mentor;
 pub mod metrics;
 pub mod model;
 pub mod patterns;
+pub mod peer;
 pub mod relearn;
 pub mod report;
 pub mod rng;
