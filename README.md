@@ -33,7 +33,7 @@ Results: [phase 1](docs/p1/README.md), [phase 2](docs/p2/README.md),
 | `metrics`   | Meals, sleeps, bumps, hurts, mean energy, mean time to food     |
 | `model`     | World models: two-layer predictive coding; backprop baseline    |
 | `memory`    | Diary over per-world maps; sleep replay, stiffening, decay      |
-| `patterns`  | How squares change, by state, age and word said; learned in sleep |
+| `patterns`  | How squares change, by state, age and word said; trust per voice |
 | `apprentice`| The learner: learned valence and volatility, drive + curiosity  |
 | `mentor`    | Words about squares: hints, names, foretells; fades; can be blind |
 | `lessons`   | A course of worlds, easiest first, moving on at mastery         |
@@ -137,8 +137,9 @@ cargo run --release --bin foretell -- --out docs/language
 
 Raises it in bush and barren worlds in turn, with no mentor, a mentor that
 says whether an eaten square will grow back, or one that says either word at
-random; then puts it in a new world of each kind
-([docs/language](docs/language/README.md)).
+random, or both taking turns in one voice or two; then puts it in a new world
+of each kind ([docs/language](docs/language/README.md),
+[docs/trust](docs/trust/README.md)).
 
 The A/B/A test also counts mix-ups: steps in world B spent on A's map
 ([docs/recognition](docs/recognition/README.md)).
