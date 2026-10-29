@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::rng::Rng;
 
 /// What occupies a square.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Cell {
     Empty,
     Wall,

@@ -1,0 +1,21 @@
+1. bush-world diary writes -88% [-88%, -87%]: met
+2. bush-world naps -90% [-91%, -89%]: met
+3. unexpected sightings written, median share 1.000 [1.000, 1.000]: met
+4. no regressions (each at most +10%):
+   bush sleeps +24% [+10%, +40%]: missed
+   barren sleeps -49% [-51%, -47%]: met
+   barren false hopes +39% [+11%, +74%]: missed
+   home-test wrong answers (100 steps) -14% [-17%, -10%]: met
+Reported only:
+   upbringing diary writes -80% [-80%, -80%]
+   upbringing naps -92% [-93%, -92%]
+   upbringing sleeps -27% [-29%, -26%]
+   home-test wrong answers (300 steps) -9% [-12%, -5%]
+   mean barren meals: off 30.9, on 94.0
+   mean barren futile returns: off 24.2, on 4.6
+   mean bush meals: off 245.8, on 260.2
+   mean bush writes: off 36000.0, on 4651.4
+   mean bush naps: off 50.7, on 4.1
+   mean bush sleeps: off 22.7, on 18.1
+   mean barren false hopes: off 21.9, on 26.8
+   mean home wrong (100): off 0.3, on 0.1

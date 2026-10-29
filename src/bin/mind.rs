@@ -100,6 +100,7 @@ fn glyph(cell: Option<Cell>) -> char {
 fn source(s: Source) -> char {
     match s {
         Source::Pattern => 'p',
+        Source::Active => 'a',
         Source::Diary => 'd',
         Source::Map => 'm',
         Source::Unknown => 'u',

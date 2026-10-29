@@ -34,7 +34,7 @@ use crate::model::{Belief, KINDS, kind, most_likely, one_hot};
 use crate::world::Cell;
 
 /// How a square last changed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Last {
     /// It came to look like this.
     Saw(Cell),
@@ -67,6 +67,12 @@ const UNIFORM: Belief = [1.0 / KINDS as f64; KINDS];
 /// Age group of `age` steps: its power of two, capped.
 fn age_group(age: u64) -> usize {
     (age.max(1).ilog2() as usize).min(AGES - 1)
+}
+
+/// The youngest age in `age`'s group: every age in a group teaches and
+/// predicts the same pattern.
+pub fn group_start(age: u64) -> u64 {
+    1 << age_group(age)
 }
 
 /// What squares become, by state and age.
