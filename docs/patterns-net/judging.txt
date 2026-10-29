@@ -1,0 +1,21 @@
+1. upbringing sleeps -3% [-5%, -2%]: missed
+2. bush sleeps -7% [-17%, +6%]: met
+3. no regressions (each at most +10%):
+   barren_sleeps +3% [+1%, +4%]: met
+   barren_hopes -85% [-88%, -82%]: met
+   home_wrong_100 +13% [+7%, +19%]: unclear
+Reported only (change, mean table -> net):
+   raised_sleeps -3% [-5%, -2%]  67.1 -> 64.9
+   bush_sleeps -7% [-17%, +6%]  22.7 -> 14.2
+   bush_meals +24% [+13%, +36%]  245.8 -> 278.7
+   barren_sleeps +3% [+1%, +4%]  54.8 -> 56.3
+   barren_hopes -85% [-88%, -82%]  21.9 -> 1.7
+   barren_meals +3% [-3%, +9%]  30.9 -> 32.5
+   barren_futile -45% [-52%, -38%]  24.2 -> 13.1
+   home_wrong_100 +13% [+7%, +19%]  0.3 -> 0.6
+   home_wrong_300 +11% [+5%, +17%]  0.3 -> 0.5
+   bush_written +0% [+0%, +0%]  36000.0 -> 36000.0
+
+real	29m27.933s
+user	115m30.151s
+sys	0m1.401s

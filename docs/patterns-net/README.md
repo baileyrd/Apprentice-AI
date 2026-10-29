@@ -55,3 +55,51 @@ My guess before running: rule 1 unclear (four 1,000-step worlds give the
 table plenty of samples already), rule 2 met, rule 3 met for sleeps and the
 home test and at risk for false hopes, since a network smooths between age
 groups and may blur "stays gone" into "grows back".
+
+## Tuning (seeds 101–110)
+
+Hidden units 8, 16, 32, 64 and 128 at rates 0.02 to 0.3. Small or slow
+networks were worse than the table everywhere except false hopes: at 16
+units and rate 0.05, upbringing sleeps rose 18% and barren sleeps 12%. They
+learn too slowly to keep up with the table's per-entry delta rule. Bigger
+and faster closed the gap: upbringing sleeps went from +24% (8 units, 0.02)
+to +0% (64 units, 0.2). Past that it stopped helping: 128 units gave the
+same, and rate 0.3 became unstable (false hopes up, bush sleeps 36).
+**Chosen: 64 hidden units, rate 0.2**, the best bush sleeps (−35%) with
+upbringing and barren sleeps level. No setting cut upbringing sleeps, so
+rule 1 looked likely to miss before judging.
+
+## Results (seeds 1–100 and 111–210, one run)
+
+`cargo run --release --bin patterns_net -- --judge` prints the verdicts
+([judging.txt](judging.txt)) and writes
+[patterns_net.csv](patterns_net.csv). About 30 minutes on 4 cores.
+
+| Rule | Result | Verdict |
+|---|---|---|
+| 1. Upbringing sleeps ≤ −10% | −3% [−5%, −2%] | **missed** |
+| 2. Bush sleeps ≤ +10% | −7% [−17%, +6%] | **met** |
+| 3a. Barren sleeps ≤ +10% | +3% [+1%, +4%] | **met** |
+| 3b. Barren false hopes ≤ +10% | −85% [−88%, −82%] | **met** |
+| 3c. Home-test wrong answers (100 steps) ≤ +10% | +13% [+7%, +19%] | **unclear** |
+
+Means, table → network: bush sleeps 22.7 → 14.2, bush meals 246 → 279
+(+24%), barren false hopes 21.9 → 1.7, barren futile returns 24.2 → 13.1
+(−45%), home-test wrong answers per seed (of 5 trials) 0.3 → 0.6.
+
+## What it shows
+
+- **The network is much better at "stays gone".** False hopes in the
+  barren world fall by 85% and futile returns by 45%, and it eats 24% more
+  in the bush world. This is the opposite of my guess: I expected
+  smoothing between age groups to blur "stays gone" into "grows back". The
+  table's weakness here was already known (PR #14/#15: fixed-rate delta
+  rule, last world wins). The network shares one set of weights across
+  every age and state, so one barren world does not overwrite what bush
+  worlds taught; the kind of square and the age both shape its answer.
+- **It does not learn sooner.** Upbringing sleeps fall 3%, not 10%. Four
+  1,000-step worlds already give the table enough samples, as guessed.
+- **The home test got a little worse, cause unchecked.** About one more
+  wrong answer per three seeds. The home test judges eaten bushes by
+  pattern regrowth (PR #11), so a different regrowth belief changes which
+  map fits; which trials flipped is not yet looked at.
