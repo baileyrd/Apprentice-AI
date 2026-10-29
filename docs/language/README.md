@@ -126,6 +126,11 @@ bush columns are 4,000 steps.
   regrow while the apprentice stands on it, so a square it was told grows
   back can still look empty at 32–63 steps. In 3 seeds that pulled the
   meaning to 0.5–0.74.
+- **Correction (counting phase, [docs/counting](../counting/README.md)):**
+  the lean toward "empty" below is mostly recency, not counting. Read after
+  an upbringing that ends in a bush world, the random words came out
+  anywhere from 0.02 to 0.83. A pattern says mostly what the last world
+  taught.
 - **Noise is not ignored: it is learned as "empty".** The random mentor's
   words came to mean nearly no food. Why: a barren square gives an "empty"
   sample every time it is seen while it stays eaten, but a bush gives one
