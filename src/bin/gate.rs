@@ -194,6 +194,9 @@ fn home_test(recall: Recall, seed: u64) -> Result<(u32, u32), SimError> {
     Ok(wrong)
 }
 
+/// A named per-seed measure.
+type Measure = (&'static str, fn(&Life) -> f64);
+
 /// Everything one seed showed under one setting.
 #[derive(Debug, Clone, Copy)]
 struct Life {
@@ -379,7 +382,7 @@ fn report(rows: &[(u64, Life, Life)]) -> Result<(), Error> {
         share.at_least(0.95)
     );
     println!("4. no regressions (each at most +10%):");
-    let checks: [(&str, fn(&Life) -> f64); 4] = [
+    let checks: [Measure; 4] = [
         ("bush sleeps", |l| f64::from(l.bush.sleeps)),
         ("barren sleeps", |l| f64::from(l.barren.sleeps)),
         ("barren false hopes", |l| f64::from(l.barren.hopes)),
@@ -392,7 +395,7 @@ fn report(rows: &[(u64, Life, Life)]) -> Result<(), Error> {
         println!("   {name} {}: {}", pct(&i), i.at_most(0.1));
     }
     println!("Reported only:");
-    let reported: [(&str, fn(&Life) -> f64); 4] = [
+    let reported: [Measure; 4] = [
         ("upbringing diary writes", |l| {
             l.raised.traffic.written as f64
         }),
@@ -411,7 +414,7 @@ fn report(rows: &[(u64, Life, Life)]) -> Result<(), Error> {
             .sum::<f64>()
             / rows.len() as f64
     };
-    let means: [(&str, fn(&Life) -> f64); 8] = [
+    let means: [Measure; 8] = [
         ("barren meals", |l| f64::from(l.barren.meals)),
         ("barren futile returns", |l| f64::from(l.barren.futile)),
         ("bush meals", |l| f64::from(l.bush.meals)),
