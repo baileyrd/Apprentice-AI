@@ -59,7 +59,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::body::{Observation, Said, VIEW, Voice};
 use crate::model::{Belief, PredictiveCoding, Rates, WorldModel, error, most_likely, one_hot};
-use crate::patterns::{Last, Patterns, group_start};
+use crate::patterns::{Last, PatternNet, Patterns, group_start};
 use crate::world::{Cell, Pos};
 
 /// How the memory consolidates, forgets and recognises contexts.
@@ -94,6 +94,8 @@ pub struct Recall {
     pub pattern_min: u32,
     /// Active memory's gate to the diary; `None` writes every sighting.
     pub gate: Option<Gate>,
+    /// A network to hold the general patterns; `None` keeps the table.
+    pub pattern_net: Option<PatternNet>,
 }
 
 /// What active memory lets through to the diary.
@@ -145,6 +147,7 @@ impl Default for Recall {
             pattern_rate: 0.05,
             pattern_min: 20,
             gate: None,
+            pattern_net: None,
         }
     }
 }
@@ -286,7 +289,10 @@ impl Memory {
             lost: 0,
             lost_since: 0,
             doubt: (0, 0),
-            patterns: Patterns::new(recall.pattern_rate, recall.pattern_min),
+            patterns: match recall.pattern_net {
+                Some(net) => Patterns::with_net(recall.pattern_rate, recall.pattern_min, net),
+                None => Patterns::new(recall.pattern_rate, recall.pattern_min),
+            },
             working: Vec::new(),
             confirmed: HashSet::new(),
             tally: HashMap::new(),
