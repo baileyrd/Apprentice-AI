@@ -22,7 +22,8 @@ Results: [phase 1](docs/p1/README.md), [phase 2](docs/p2/README.md),
 [phase 3](docs/p3/README.md), [phase 4](docs/p4/README.md),
 [energy fix](docs/energy/README.md), [mentor](docs/mentor/README.md),
 [lessons and naming](docs/lessons/README.md),
-[patterns](docs/patterns/README.md), [language](docs/language/README.md).
+[patterns](docs/patterns/README.md), [language](docs/language/README.md),
+[trust](docs/trust/README.md), [peers](docs/peers/README.md).
 
 | Module      | What it holds                                                   |
 |-------------|-----------------------------------------------------------------|
@@ -34,6 +35,7 @@ Results: [phase 1](docs/p1/README.md), [phase 2](docs/p2/README.md),
 | `model`     | World models: two-layer predictive coding; backprop baseline    |
 | `memory`    | Diary over per-world maps; sleep replay, stiffening, decay      |
 | `patterns`  | How squares change, by state, age and word said; trust per voice |
+| `peer`      | An apprentice's own word about a companion's meal, from its patterns |
 | `apprentice`| The learner: learned valence and volatility, drive + curiosity  |
 | `mentor`    | Words about squares: hints, names, foretells; fades; can be blind |
 | `lessons`   | A course of worlds, easiest first, moving on at mastery         |
@@ -140,6 +142,15 @@ says whether an eaten square will grow back, or one that says either word at
 random, or both taking turns in one voice or two; then puts it in a new world
 of each kind ([docs/language](docs/language/README.md),
 [docs/trust](docs/trust/README.md)).
+
+```sh
+cargo run --release --bin peers -- --out docs/peers
+```
+
+Two apprentices, each saying what it expects about the other's meals: does a
+newcomer settle into a new world faster alone, arriving with its sibling, or
+after its sibling or a stranger got there first
+([docs/peers](docs/peers/README.md))?
 
 The A/B/A test also counts mix-ups: steps in world B spent on A's map
 ([docs/recognition](docs/recognition/README.md)).
