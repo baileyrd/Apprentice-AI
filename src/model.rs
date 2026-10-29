@@ -17,7 +17,7 @@
 
 use std::collections::HashMap;
 
-use crate::body::{Observation, Word};
+use crate::body::{Observation, Said};
 use crate::world::{Cell, Pos};
 
 /// Number of cell kinds.
@@ -100,9 +100,9 @@ pub trait WorldModel {
     /// Eating at `at` fed the body. Models with a memory mark the moment.
     fn fed(&mut self, _at: Pos) {}
 
-    /// A mentor said `word` about the square at `at`. Models with patterns
-    /// learn what such squares become.
-    fn hear(&mut self, _at: Pos, _word: Word) {}
+    /// A mentor said `said` about the square at `at`. Models with patterns
+    /// learn what such squares become, and whom to believe.
+    fn hear(&mut self, _at: Pos, _said: Said) {}
 
     /// Which of its own maps it is using; `None` if it keeps only one.
     fn map_in_use(&self) -> Option<usize> {

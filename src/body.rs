@@ -60,6 +60,18 @@ impl Observation {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Word(pub u8);
 
+/// Whose voice a word was said in. The apprentice can tell voices apart but
+/// knows nothing else about who is speaking.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Voice(pub u8);
+
+/// A word, and the voice it was said in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Said {
+    pub voice: Voice,
+    pub word: Word,
+}
+
 /// What the agent can do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Action {

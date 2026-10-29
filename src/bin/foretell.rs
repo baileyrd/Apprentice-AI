@@ -4,8 +4,9 @@
 //! Each apprentice grows up in four worlds, alternating bush worlds (eaten
 //! bushes grow back) and barren worlds (they never do), with no mentor, a
 //! mentor that says its true word for what an eaten square will do, or one
-//! that says either word at random. Then, from a fresh copy, it lives in a new
-//! barren world and in a new bush world.
+//! that says either word at random. Two more minds hear both mentors, taking
+//! turns meal by meal, either in one voice or in two it can tell apart. Then, from a
+//! fresh copy, it lives in a new barren world and in a new bush world.
 
 use std::collections::HashSet;
 use std::fs;
@@ -14,7 +15,7 @@ use std::process::ExitCode;
 
 use apprentice::adaptation::{Change, Setup};
 use apprentice::apprentice::{Apprentice, Drives, Mind};
-use apprentice::body::Word;
+use apprentice::body::{Said, Voice, Word};
 use apprentice::memory::{Memory, Recall};
 use apprentice::mentor::{Foretell, GROWS_BACK, Mentor, STAYS_GONE, Teaching};
 use apprentice::model::{Rates, WorldModel, kind};
@@ -26,7 +27,8 @@ const USAGE: &str = "\
 usage: foretell [--seeds N] [--from SEED] [--world-steps S] [--out DIR]
 
 Seeds FROM..FROM+N-1 (default 1..10). Raises apprentices with no mentor, a
-true foretelling mentor and a random one; prints what its words came to mean,
+true foretelling mentor, a random one, and both at once in one voice or two;
+prints what its words came to mean, how far it trusts each voice,
 futile returns in a new barren world and sleeps in a new bush world; writes
 DIR/foretell.csv (default DIR: runs/foretell). Each upbringing world lasts S
 steps (default 1,000).";
@@ -34,10 +36,22 @@ steps (default 1,000).";
 type Error = Box<dyn std::error::Error>;
 type Learner = Apprentice<Memory>;
 
-const MINDS: [(&str, Foretell); 3] = [
-    ("no mentor", Foretell::Never),
-    ("true mentor", Foretell::Truly),
-    ("random mentor", Foretell::AtRandom),
+/// Each mind's mentors: how each foretells, and its voice.
+type Mentors = &'static [(Foretell, u8)];
+const HONEST: Voice = Voice(0);
+const OTHER: Voice = Voice(1);
+const MINDS: [(&str, Mentors); 5] = [
+    ("no mentor", &[]),
+    ("true mentor", &[(Foretell::Truly, 0)]),
+    ("random mentor", &[(Foretell::AtRandom, 0)]),
+    (
+        "both, one voice",
+        &[(Foretell::Truly, 0), (Foretell::AtRandom, 0)],
+    ),
+    (
+        "both, two voices",
+        &[(Foretell::Truly, 0), (Foretell::AtRandom, 1)],
+    ),
 ];
 const UPBRINGING: u64 = 4;
 const BARREN_STEPS: usize = 2_000;
@@ -60,10 +74,10 @@ fn barren() -> Config {
     }
 }
 
-/// A mind and the mentor that raises it, if any.
+/// A mind and the mentors that raise it.
 struct Life {
     mind: Learner,
-    mentor: Option<Mentor>,
+    mentors: Vec<Mentor>,
 }
 
 /// What a stretch in one world showed.
@@ -79,24 +93,31 @@ struct Stay {
 }
 
 impl Life {
-    /// A newborn mind; `how` its mentor foretells, if at all.
-    fn new(how: Foretell, seed: u64) -> Self {
+    /// A newborn mind with `mentors`.
+    fn new(mentors: Mentors, seed: u64) -> Self {
         let memory = Memory::new(Rates::default(), Recall::default());
-        let teaching = Teaching {
-            fade: u64::MAX,
-            foretells: how,
-            ..Teaching::default()
+        let mentor = |i: usize, &(foretells, voice): &(Foretell, u8)| {
+            let teaching = Teaching {
+                fade: u64::MAX,
+                foretells,
+                ..Teaching::default()
+            };
+            Mentor::new(teaching, seed + i as u64).with_voice(Voice(voice))
         };
         Self {
             mind: Apprentice::with_model(Drives::default(), memory, seed),
-            mentor: (how != Foretell::Never).then(|| Mentor::new(teaching, seed)),
+            mentors: mentors
+                .iter()
+                .enumerate()
+                .map(|(i, m)| mentor(i, m))
+                .collect(),
         }
     }
 
     /// The upbringing: bush and barren worlds in turn, ending in the kind
     /// unlike `next`, so what it last learned is wrong there.
-    fn raised(how: Foretell, seed: u64, next: &Config, steps: usize) -> Result<Self, SimError> {
-        let mut life = Self::new(how, seed);
+    fn raised(mentors: Mentors, seed: u64, next: &Config, steps: usize) -> Result<Self, SimError> {
+        let mut life = Self::new(mentors, seed);
         let last = if next.regrowth == Regrowth::Anywhere {
             bushes()
         } else {
@@ -130,12 +151,14 @@ impl Life {
             }
             let outcome = sim.step(self.mind.act(&obs));
             self.mind.feel(&outcome);
-            if let Some((at, word)) = self
-                .mentor
-                .as_mut()
+            // Mentors take turns: one speaks about each meal.
+            let turn = stay.meals as usize % self.mentors.len().max(1);
+            if let Some((at, said)) = self
+                .mentors
+                .get_mut(turn)
                 .and_then(|m| m.foretell(&sim, &outcome))
             {
-                self.mind.hear(at, word);
+                self.mind.hear(at, said);
             }
             stay.sleeps += u32::from(outcome.slept);
             match outcome.event {
@@ -168,10 +191,14 @@ impl Life {
         hopes
     }
 
-    /// Chance of food `word` gives a square eaten `AGE` steps ago; `None`
-    /// until learned.
+    /// Chance of food `word`, in the honest mentor's voice, gives a square
+    /// eaten `AGE` steps ago; `None` until learned.
     fn meaning(&self, word: Word) -> Option<f64> {
-        let b = self.mind.model().foretold(Last::Ate, AGE, word)?;
+        let said = Said {
+            voice: HONEST,
+            word,
+        };
+        let b = self.mind.model().foretold(Last::Ate, AGE, said)?;
         Some(b[kind(Cell::Food)])
     }
 
@@ -184,6 +211,8 @@ impl Life {
 
 /// What one seed showed for one mind.
 struct Outcome {
+    /// Trust in the first and second voice after the upbringing.
+    trust: (f64, f64),
     general: Option<f64>,
     grows_back: Option<f64>,
     stays_gone: Option<f64>,
@@ -193,14 +222,20 @@ struct Outcome {
 
 /// Raises the mind twice, once for each test, each upbringing ending in the
 /// other kind of world.
-fn run(how: Foretell, seed: u64, steps: usize) -> Result<Outcome, SimError> {
-    let mut life = Life::raised(how, seed, &bushes(), steps)?;
+fn run(mentors: Mentors, seed: u64, steps: usize) -> Result<Outcome, SimError> {
+    let mut life = Life::raised(mentors, seed, &bushes(), steps)?;
     let (grows_back, stays_gone) = (life.meaning(GROWS_BACK), life.meaning(STAYS_GONE));
     let general = life.expected();
+    let model = life.mind.model();
+    let trust = (model.trust(HONEST), model.trust(OTHER));
     let bush = life.live(bushes(), seed + 6_000, BUSH_STEPS)?;
-    let barren =
-        Life::raised(how, seed, &barren(), steps)?.live(barren(), seed + 5_000, BARREN_STEPS)?;
+    let barren = Life::raised(mentors, seed, &barren(), steps)?.live(
+        barren(),
+        seed + 5_000,
+        BARREN_STEPS,
+    )?;
     Ok(Outcome {
+        trust,
         general,
         grows_back,
         stays_gone,
@@ -266,14 +301,16 @@ fn execute(args: &Args) -> Result<(), Error> {
         world_steps,
     } = *args;
     let mut csv = String::from(
-        "mind,seed,general,grows_back,stays_gone,barren_futile,barren_hopes,barren_sleeps,barren_meals,bush_futile,bush_hopes,bush_sleeps,bush_meals\n",
+        "mind,seed,trust_0,trust_1,general,grows_back,stays_gone,barren_futile,barren_hopes,barren_sleeps,barren_meals,bush_futile,bush_hopes,bush_sleeps,bush_meals\n",
     );
-    for (name, how) in MINDS {
+    for (name, mentors) in MINDS {
         let mut results = Vec::new();
         for seed in from..from + seeds {
-            let r = run(how, seed, world_steps)?;
+            let r = run(mentors, seed, world_steps)?;
             csv.push_str(&format!(
-                "{name},{seed},{},{},{},{},{},{},{},{},{},{},{}\n",
+                "{name},{seed},{:.3},{:.3},{},{},{},{},{},{},{},{},{},{},{}\n",
+                r.trust.0,
+                r.trust.1,
                 show(r.general),
                 show(r.grows_back),
                 show(r.stays_gone),
@@ -297,8 +334,10 @@ fn execute(args: &Args) -> Result<(), Error> {
             })
             .count();
         println!(
-            "{name:>13}: words learned {learned}/{}; barren futile returns (first 1,000) {:.1}, false hopes {:.1}, sleeps {:.1}, meals {:.1}; bush false hopes {:.1}, sleeps {:.1}, meals {:.1}",
+            "{name:>16}: words learned {learned}/{}; trust {:.2} / {:.2}; barren futile returns (first 1,000) {:.1}, false hopes {:.1}, sleeps {:.1}, meals {:.1}; bush false hopes {:.1}, sleeps {:.1}, meals {:.1}",
             results.len(),
+            median(results.iter().map(|r| r.trust.0).collect()),
+            median(results.iter().map(|r| r.trust.1).collect()),
             med(|r| r.barren.futile),
             med(|r| r.barren.hopes),
             med(|r| r.barren.sleeps),

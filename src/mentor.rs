@@ -25,7 +25,7 @@
 
 use std::collections::{HashSet, VecDeque};
 
-use crate::body::{Observation, VIEW, Word};
+use crate::body::{Observation, Said, VIEW, Voice, Word};
 use crate::model::{KINDS, kind};
 use crate::rng::Rng;
 use crate::sim::{Event, Outcome, Regrowth, Sim};
@@ -87,6 +87,8 @@ pub struct Mentor {
     sight: Sight,
     /// Its word for each kind of square.
     words: [Word; KINDS],
+    /// The voice it speaks in.
+    voice: Voice,
     rng: Rng,
 }
 
@@ -107,6 +109,7 @@ impl Mentor {
             teaching,
             sight: Sight::True,
             words: vocabulary(&mut rng),
+            voice: Voice(0),
             rng,
         }
     }
@@ -126,8 +129,14 @@ impl Mentor {
             teaching,
             sight: Sight::Blind(phantoms),
             words: vocabulary(&mut rng),
+            voice: Voice(0),
             rng,
         }
+    }
+
+    /// The same mentor, speaking in `voice`.
+    pub fn with_voice(self, voice: Voice) -> Self {
+        Self { voice, ..self }
     }
 
     /// Its word for `cell`.
@@ -136,8 +145,8 @@ impl Mentor {
     }
 
     /// What it says this step: a square, relative to the apprentice's wake
-    /// square, and a word about it; `None` when it stays quiet.
-    pub fn say(&mut self, sim: &Sim) -> Option<(Pos, Word)> {
+    /// square, and a word about it in its voice; `None` when it stays quiet.
+    pub fn say(&mut self, sim: &Sim) -> Option<(Pos, Said)> {
         let Teaching {
             stuck, fade, names, ..
         } = self.teaching;
@@ -154,13 +163,13 @@ impl Mentor {
             return None;
         };
         let start = sim.start();
-        Some((at.shift(-start.x, -start.y), word))
+        Some((at.shift(-start.x, -start.y), self.said(word)))
     }
 
     /// What it says after `outcome`: if the apprentice ate, the square it ate
     /// from, relative to its wake square, and a word for what that square
     /// will do; `None` otherwise or when it stays quiet.
-    pub fn foretell(&mut self, sim: &Sim, outcome: &Outcome) -> Option<(Pos, Word)> {
+    pub fn foretell(&mut self, sim: &Sim, outcome: &Outcome) -> Option<(Pos, Said)> {
         let how = self.teaching.foretells;
         if outcome.event != Event::Ate || how == Foretell::Never {
             return None;
@@ -174,7 +183,15 @@ impl Mentor {
         };
         let word = if grows { GROWS_BACK } else { STAYS_GONE };
         let start = sim.start();
-        Some((sim.pos().shift(-start.x, -start.y), word))
+        Some((sim.pos().shift(-start.x, -start.y), self.said(word)))
+    }
+
+    /// `word`, in its voice.
+    fn said(&self, word: Word) -> Said {
+        Said {
+            voice: self.voice,
+            word,
+        }
     }
 
     /// Whether it says anything this step: less often as `fade` nears.
@@ -254,7 +271,7 @@ mod tests {
             ..Teaching::default()
         };
         let mut m = Mentor::new(teaching, 0);
-        let (at, word) = m.say(&s).expect("speaks early on");
+        let (at, Said { word, .. }) = m.say(&s).expect("speaks early on");
         let start = s.start();
         let real = at.shift(start.x, start.y);
         assert_eq!(s.grid().get(real), Cell::Food);
@@ -321,7 +338,7 @@ mod tests {
             let mut m = foretelling(Foretell::Truly);
             let start = s.start();
             let at = s.pos().shift(-start.x, -start.y);
-            assert_eq!(m.foretell(&s, &outcome), Some((at, word)));
+            assert_eq!(m.foretell(&s, &outcome), Some((at, m.said(word))));
         }
     }
 
@@ -339,7 +356,7 @@ mod tests {
         let (s, ate) = fed(Regrowth::Anywhere);
         let mut m = foretelling(Foretell::AtRandom);
         let words: HashSet<Word> = (0..50)
-            .filter_map(|_| m.foretell(&s, &ate).map(|(_, w)| w))
+            .filter_map(|_| m.foretell(&s, &ate).map(|(_, s)| s.word))
             .collect();
         assert_eq!(words, HashSet::from([GROWS_BACK, STAYS_GONE]));
     }
@@ -367,7 +384,7 @@ mod tests {
         let mut m = Mentor::new(teaching, 0);
         let start = s.start();
         for _ in 0..50 {
-            let (at, word) = m.say(&s).expect("names while fed");
+            let (at, Said { word, .. }) = m.say(&s).expect("names while fed");
             let real = at.shift(start.x, start.y);
             assert!((real.x - s.pos().x).abs() <= 1 && (real.y - s.pos().y).abs() <= 1);
             assert_eq!(word, m.word(s.grid().get(real)));
