@@ -621,3 +621,26 @@ fn main() -> ExitCode {
     }
     ExitCode::SUCCESS
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keys_may_hold_commas_and_blanks_read_as_nan() {
+        let t = Table::parse("mind,seed,a,b\nboth, two voices,3,1.5,\nnone,3,2,4\n").unwrap();
+        let a = t.col("both, two voices", "a", &[3]);
+        assert_eq!(a, vec![1.5]);
+        assert!(t.col("both, two voices", "b", &[3])[0].is_nan());
+        assert_eq!(t.seeds("none"), vec![3]);
+    }
+
+    #[test]
+    fn combined_verdicts() {
+        use Verdict::*;
+        assert_eq!(all(&[Met, Unclear]), Unclear);
+        assert_eq!(all(&[Met, Missed]), Missed);
+        assert_eq!(any(&[Missed, Met]), Met);
+        assert_eq!(any(&[Missed, Unclear]), Unclear);
+    }
+}

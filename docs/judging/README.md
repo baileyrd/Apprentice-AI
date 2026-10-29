@@ -104,3 +104,64 @@ verdicts reversed between two sets of 10 seeds. As a further check, the new
 interval left out "no change" in 5% of the do-nothing splits; a 90%
 interval should do so about 10% of the time or less, so it errs on the
 careful side.
+
+## Re-judging PRs #14, #16 and #17 (seeds 1–100 and 111–210, one run)
+
+Each PR's CSV was written by its own code: [pr14/](pr14/), [pr16/](pr16/),
+[pr17/](pr17/). "Old on 1–10" re-applies the old method to the first 10
+of these seeds; it reproduces every original verdict, so the code and data
+match what each PR reported.
+
+| Rule | Original (seeds 1–10) | Now (200 seeds) | Flip? |
+|---|---|---|---|
+| **#14 Language** | | | |
+| 1. Words learned in ≥ 90% of seeds | missed (7/10) | missed | – |
+| 2. Futile returns ≥ 50% below no mentor | missed (+7%) | missed: −4% [−14%, +7%] | – |
+| 3. Bush sleeps ≤ 10% above no mentor | met (−41%) | met: −57% [−62%, −51%] | – |
+| 4. Random mentor's futile returns ≤ 10% above | missed (+33%) | unclear: +23% [+9%, +39%] | softer |
+| **#16 Trust** | | | |
+| 1. Honest trust 0.3 above random in ≥ 90% | missed (4/10) | missed | – |
+| 2. Two voices: false hopes ≤ 2; bush sleeps ≤ 10% above honest alone | missed | missed: median 11; +66% [+50%, +84%] | – |
+| 3. Two voices: false hopes ≥ 50% below one voice | met (−61%) | **missed: −30% [−44%, −12%]** | **met → missed** |
+| 4. No language-test sleeps > 10% above the code before | met | unclear: true mentor's bush sleeps +3% [−5%, +12%] | softer |
+| **#17 Peers** | | | |
+| 1. Together: false hopes −25%, bush sleeps −15% | missed | missed: +12% [−13%, +42%]; +11% [−1%, +24%] | – |
+| 2. Elder: false hopes −50%, bush sleeps −25% | missed | missed: −2% [−23%, +25%]; −4% [−15%, +8%] | – |
+| 3. Sibling elder 30% below stranger on one, within 10% on the other | missed | missed: −2% [−23%, +25%]; −17% [−26%, −6%] | – |
+| 4. No condition's sleeps > 10% above alone | missed | unclear: stranger's bush sleeps +15% [+9%, +21%] | softer |
+
+Numbers are the typical change against the rule's baseline, with the 90%
+interval in brackets.
+
+## What it shows
+
+- **One verdict was luck.** Trust rule 3 passed on 10 seeds (−61%), but on
+  200 seeds two voices cut false hopes by 30%, with the interval topping out
+  at −44%: a real gain, but not the 50% the rule asked for. Two voices also
+  cut bush sleeps by 27% [−35%, −17%] against one voice, which the original
+  10 seeds hid.
+- **The strong results hold, and are stronger.** The true mentor's words
+  cut false hopes in a new barren world by 89% and bush sleeps by 57%. A
+  mentor saying words at random costs 43% more bush sleeps [+26%, +63%];
+  the trust phase brought that cost down by 26% [−35%, −17%] (#16 code
+  against #14 code, same seeds).
+- **Three misses become "unclear".** They were misses by a margin smaller
+  than the noise. None of them turns into a pass.
+- **Peers: no hidden win.** With the standard upbringing, an elder sibling
+  ahead helps neither false hopes (−2%) nor bush sleeps (−4%), and a
+  stranger ahead costs 15% more bush sleeps [+9%, +21%], a small real harm
+  that 10 seeds could not tell from noise. The 40-seed check in the peers
+  phase (together ≈ alone) holds up. The longer-upbringing result (elder
+  helps a lot) was not re-run here.
+- **The old method was a coin toss on bush sleeps.** On the calibration
+  seeds, a do-nothing change passed "15% fewer bush sleeps" in 44% of tries,
+  and about 3 of 11 verdicts reversed between two sets of 10 seeds.
+
+## From now on
+
+New phases are judged this way: rules written before running, tuning on
+seeds 101–110, judging on the 200 seeds above (1–100 and 111–210), each
+condition paired seed by seed with its baseline, and every rule read as
+met, missed or unclear from its 90% interval with `apprentice::judge`.
+Runs take about 25 minutes on four cores for a test the size of the peers
+test.

@@ -23,7 +23,8 @@ Results: [phase 1](docs/p1/README.md), [phase 2](docs/p2/README.md),
 [energy fix](docs/energy/README.md), [mentor](docs/mentor/README.md),
 [lessons and naming](docs/lessons/README.md),
 [patterns](docs/patterns/README.md), [language](docs/language/README.md),
-[trust](docs/trust/README.md), [peers](docs/peers/README.md).
+[trust](docs/trust/README.md), [peers](docs/peers/README.md),
+[judging](docs/judging/README.md).
 
 | Module      | What it holds                                                   |
 |-------------|-----------------------------------------------------------------|
@@ -38,6 +39,7 @@ Results: [phase 1](docs/p1/README.md), [phase 2](docs/p2/README.md),
 | `peer`      | An apprentice's own word about a companion's meal, from its patterns |
 | `apprentice`| The learner: learned valence and volatility, drive + curiosity  |
 | `mentor`    | Words about squares: hints, names, foretells; fades; can be blind |
+| `judge`     | Verdicts across seeds: paired typical change, 90% interval, met/missed/unclear |
 | `lessons`   | A course of worlds, easiest first, moving on at mastery         |
 | `adaptation`| Move half the walls or all the food, time the recovery          |
 | `relearn`   | World A, then B, then A again: does B erase A?                  |
@@ -151,6 +153,15 @@ Two apprentices, each saying what it expects about the other's meals: does a
 newcomer settle into a new world faster alone, arriving with its sibling, or
 after its sibling or a stranger got there first
 ([docs/peers](docs/peers/README.md))?
+
+```sh
+cargo run --release --bin judging
+```
+
+How results are judged: each condition paired seed by seed with its
+baseline over 200 seeds, every rule read as met, missed or unclear from a
+90% interval; re-judges the language, trust and peers phases
+([docs/judging](docs/judging/README.md)).
 
 The A/B/A test also counts mix-ups: steps in world B spent on A's map
 ([docs/recognition](docs/recognition/README.md)).
