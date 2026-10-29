@@ -71,3 +71,36 @@ My guess before running: the old method will pass a do-nothing change on
 bush sleeps about a third of the time, and the rules that hinge on bush
 sleeps (#14 rule 3, #16 rule 2, all four of #17) will mostly become
 unclear rather than flip outright.
+
+## Calibration (seeds 2001–2200)
+
+`cargo run --release --bin judging` reads the CSVs in this folder and
+prints everything below. Calibration CSVs: [calibration/](calibration/),
+written by `foretell` and `peers` on today's code.
+
+**Interval width for bush sleeps**, high end minus low end:
+
+| Seeds | True mentor vs none | Elder ahead vs alone |
+|--:|--:|--:|
+| 50 | 0.22 | 0.42 |
+| 100 | 0.15 | 0.303 |
+| 200 | 0.10 | 0.21 |
+
+At 100 seeds the elder comparison is just over the 0.30 limit, so by the
+rule **N = 200**.
+
+One change, made here before any judging run: the judging seeds are **1–100
+and 111–210**, not 1–200, so that seeds 101–110, which past phases tuned
+on, play no part in judging them.
+
+| Check | Old method | New method | Met? |
+|---|--:|--:|---|
+| 1. A do-nothing change called "at least 15% fewer bush sleeps" | 44% of splits | 0% of splits | yes |
+| 2. Met/missed flips between two seed groups, over 11 rules | 2.9 on average (groups of 10) | 0 (groups of 100) | yes |
+
+So under the old method, a change that does nothing passed a "15% fewer
+bush sleeps" rule almost half the time, and on average about 3 of 11
+verdicts reversed between two sets of 10 seeds. As a further check, the new
+interval left out "no change" in 5% of the do-nothing splits; a 90%
+interval should do so about 10% of the time or less, so it errs on the
+careful side.

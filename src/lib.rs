@@ -9,6 +9,7 @@ pub mod apprentice;
 pub mod body;
 pub mod experiment;
 pub mod home;
+pub mod judge;
 pub mod lessons;
 pub mod memory;
 pub mod mentor;
