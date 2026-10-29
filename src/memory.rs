@@ -94,7 +94,8 @@ pub struct Recall {
     pub pattern_min: u32,
     /// Active memory's gate to the diary; `None` writes every sighting.
     pub gate: Option<Gate>,
-    /// A network to hold the general patterns; `None` keeps the table.
+    /// A network to hold the general patterns (the default since PR #22);
+    /// `None` keeps the table.
     pub pattern_net: Option<PatternNet>,
 }
 
@@ -147,7 +148,7 @@ impl Default for Recall {
             pattern_rate: 0.05,
             pattern_min: 20,
             gate: None,
-            pattern_net: None,
+            pattern_net: Some(PatternNet::default()),
         }
     }
 }
@@ -870,6 +871,10 @@ mod tests {
         m.observe(&at(beside, v));
     }
 
+    /// Meals that teach the patterns in the tests below: enough for the
+    /// network, which shares what it learns across ages, to settle.
+    const MEALS: i32 = 300;
+
     /// A memory that never naps on its own.
     fn no_naps(patterns: bool) -> Memory {
         Memory::new(
@@ -888,7 +893,7 @@ mod tests {
         let mut results = Vec::new();
         for patterns in [false, true] {
             let mut m = no_naps(patterns);
-            for i in 0..40 {
+            for i in 0..MEALS {
                 eat_and_watch(&mut m, Pos { x: 10 * i, y: 0 });
                 m.sleep();
             }
@@ -914,7 +919,7 @@ mod tests {
     fn patterns_learn_only_in_sleep() {
         let mut m = no_naps(true);
         m.recall.capacity = 100_000;
-        for i in 0..40 {
+        for i in 0..MEALS {
             eat_and_watch(&mut m, Pos { x: 10 * i, y: 0 });
         }
         assert_eq!(m.patterns.predict(Last::Ate, 40, None), None);
@@ -996,7 +1001,7 @@ mod tests {
         let mut rises = Vec::new();
         for patterns in [false, true] {
             let mut m = no_naps(patterns);
-            for i in 0..40 {
+            for i in 0..MEALS {
                 eat_and_watch(&mut m, Pos { x: 10 * i, y: 0 });
                 m.sleep();
             }

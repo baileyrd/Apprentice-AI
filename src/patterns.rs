@@ -95,6 +95,17 @@ pub struct PatternNet {
     pub seed: u64,
 }
 
+impl Default for PatternNet {
+    /// The size and rate tuned on seeds 101-110 (docs/patterns-net).
+    fn default() -> Self {
+        Self {
+            hidden: NonZeroUsize::new(64).unwrap_or(NonZeroUsize::MIN),
+            rate: 0.2,
+            seed: 0,
+        }
+    }
+}
+
 /// Units the pattern network sees: the state, the age group, and the age as
 /// one smooth number.
 const FEATURES: usize = STATES + AGES + 1;
