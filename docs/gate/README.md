@@ -89,3 +89,79 @@ the general patterns learn from fewer sightings of squares that did not
 change, which could tilt them toward "things change", and confirmations
 stiffen a square once per sleep instead of once per sighting, so known
 squares may fade differently.
+
+## Tuning (seeds 101–110)
+
+The first tuning run turned up a flaw in the design above, fixed before
+judging. With only "surprising" sightings replayed, the general patterns
+learned mostly from squares that changed, so they came to expect change:
+an empty square seen 4–7 steps ago was given an 8–9% chance of being food
+(0–4% with the gate off), and up to 43% after 128 steps. **Change:**
+confirmations now also teach the patterns they confirm. Short-term memory
+keeps a tally per pattern (state, age group, word, what was seen), not an
+entry per sighting, and sleep replays the tally before the diary. That
+brought the patterns back near gate-off levels.
+
+Then, with the tally: threshold 0.05, 0.1 and 0.2; active memory of 9, 18
+and 36 squares. All met rules 1–3; bush sleeps on 10 seeds ranged from
+−29% to +42%, all unclear. Chosen: **threshold 0.05, 18 squares**, the
+best bush sleeps. A threshold of 0 writes everything and gives exactly
+the gate-off numbers, and gate off gives exactly PR #14's numbers (checked
+on seeds 1–4).
+
+## Results (seeds 1–100 and 111–210, one run)
+
+`cargo run --release --bin gate -- --judge` prints the verdicts
+([judging.txt](judging.txt)) and writes [gate.csv](gate.csv).
+
+| Rule | Result | Verdict |
+|---|---|---|
+| 1. Diary carries much less (≤ −50%) | −88% [−88%, −87%] | **met** |
+| 2. Fewer naps (≤ −30%) | −90% [−91%, −89%] | **met** |
+| 3. Unexpected sightings written (median ≥ 0.95) | 1.000 | **met** |
+| 4. No regressions (each ≤ +10%) | | **missed** |
+| – bush sleeps | +24% [+10%, +40%] | missed |
+| – barren sleeps | −49% [−51%, −47%] | met |
+| – barren false hopes | +39% [+11%, +74%] | missed |
+| – home-test wrong answers (100 steps) | −14% [−17%, −10%] | met |
+
+Numbers are the typical change against gate off, with the 90% interval in
+brackets. Reported only: in the upbringing, diary writes −80%, naps −92%,
+sleeps −27%; home-test wrong answers after 300 steps −9%.
+
+## What it shows
+
+- **The gate does its job.** In a world it has started to know, nearly
+  nine sightings in ten were confirmations, and nothing unexpected was
+  dropped. The diary fills about ten times more slowly, so naps almost
+  stop (50.7 → 4.1 per bush world, on average).
+- **It evens lives out rather than improving them.** Bush sleeps, by how
+  the seed did with the gate off:
+
+  | Gate-off bush sleeps | Seeds | Off (mean) | On (mean) | Typical change |
+  |---|--:|--:|--:|--:|
+  | 0–5 | 68 | 3.3 | 12.8 | +158% |
+  | 6–15 | 77 | 9.2 | 16.3 | +44% |
+  | 16–40 | 25 | 26.7 | 19.8 | −30% |
+  | over 40 | 30 | 97.7 | 33.6 | −74% |
+
+  The mean falls (22.7 → 18.1) but the typical seed does worse, so the
+  rule is missed. Lives that went well get worse, and lives that went
+  badly get much better.
+- **The false-hope miss comes from eating more.** In the barren world it
+  eats three times as often (30.9 → 94.0 meals on average) and wastes far
+  fewer tries on squares it ate from (futile returns 24.2 → 4.6), so more
+  eaten squares come back into view. Per meal, false hopes fall from 0.71
+  to 0.28. The gate-off apprentice starves in barren worlds (about one
+  sleep every 35 steps); with the gate it sleeps half as often. The rule
+  counted false hopes, not false hopes per meal, so it stands as missed.
+- **Likely cause of both, unchecked:** the map now learns mostly in the
+  long sleeps, not in naps every 64 steps. Where quick updating pays (a
+  good life in a bush world, learning where bushes are) that costs; where
+  stale beliefs hurt (expecting a barren world's eaten squares to regrow),
+  learning less often from fewer, surprising sightings seems to help. The
+  next card in Nano's design, sleep with a replay budget chosen by
+  "surprise" and stakes, is where to test this.
+
+The gate stays off by default (`Recall::gate: None`), so no earlier result
+changes.
