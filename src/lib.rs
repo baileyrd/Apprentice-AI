@@ -11,6 +11,7 @@ pub mod experiment;
 pub mod home;
 pub mod judge;
 pub mod lessons;
+pub mod life;
 pub mod memory;
 pub mod mentor;
 pub mod metrics;

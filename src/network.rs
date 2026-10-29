@@ -24,6 +24,8 @@
 //!
 //! With no hidden layer both are the same delta rule.
 
+use std::num::NonZeroUsize;
+
 use crate::rng::Rng;
 
 /// How a [`Net`] turns an error into weight changes.
@@ -145,6 +147,22 @@ impl Net {
             rate,
             learning,
         })
+    }
+
+    /// A network with one hidden layer. Every size is non-zero, so unlike
+    /// [`Net::new`] it cannot fail.
+    pub fn one_hidden(sizes: [NonZeroUsize; 3], rate: f64, learning: Learning, seed: u64) -> Self {
+        let [ins, hidden, outs] = sizes.map(NonZeroUsize::get);
+        let mut rng = Rng::new(seed);
+        let links = vec![
+            Link::new(ins, hidden, &mut rng),
+            Link::new(hidden, outs, &mut rng),
+        ];
+        Self {
+            links,
+            rate,
+            learning,
+        }
     }
 
     /// Every layer's value on a forward sweep, input first, output last.

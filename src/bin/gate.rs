@@ -7,20 +7,13 @@
 //! home as left, home with a wall moved, three strangers). Rules are in
 //! docs/gate/README.md.
 
-use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
-use std::thread;
 
-use apprentice::adaptation::{Change, Setup};
-use apprentice::apprentice::{Apprentice, Drives, Mind};
-use apprentice::home::{Place, at_home_with, step, world};
 use apprentice::judge::Interval;
-use apprentice::memory::{Gate, Memory, Recall, Traffic};
-use apprentice::model::{Rates, WorldModel, kind};
-use apprentice::sim::{Config, Event, Regrowth, Sim, SimError};
-use apprentice::world::{Cell, Pos};
+use apprentice::life::{Life, Measure, lives};
+use apprentice::memory::{Gate, Recall, Traffic};
 
 const USAGE: &str = "\
 usage: gate [--seeds N] [--from SEED] [--judge] [--threshold X] [--span K] [--out DIR]
@@ -31,192 +24,6 @@ on (threshold X, default 0.05; active memory of K squares, default 18),
 prints each rule's verdict and writes DIR/gate.csv (default DIR: runs/gate).";
 
 type Error = Box<dyn std::error::Error>;
-type Learner = Apprentice<Memory>;
-
-const UPBRINGING: u64 = 4;
-const WORLD_STEPS: usize = 1_000;
-const BARREN_STEPS: usize = 2_000;
-const BUSH_STEPS: usize = 4_000;
-/// Steps of the barren world in which false hopes are counted.
-const WINDOW: usize = 1_000;
-/// Chance of food above which a square counts as hoped for.
-const HOPE: f64 = 0.5;
-/// The home test: steps per trial, and the steps at which answers are read.
-const TRIAL_STEPS: usize = 300;
-const ASKED: usize = 100;
-const STRANGERS: u64 = 3;
-
-fn bushes() -> Config {
-    Setup::for_change(Change::Food).config
-}
-
-fn barren() -> Config {
-    Config {
-        regrowth: Regrowth::Anywhere,
-        ..bushes()
-    }
-}
-
-/// What a stretch in one world showed.
-#[derive(Debug, Default, Clone, Copy)]
-struct Stay {
-    sleeps: u32,
-    /// False hopes in the first `WINDOW` steps: a square it ate from comes
-    /// into view empty when it gave it more than even odds of food.
-    hopes: u32,
-    meals: u32,
-    /// Tries to eat, in the first `WINDOW` steps, at a square it ate from
-    /// that holds nothing.
-    futile: u32,
-    /// What memory did with its sightings during the stay.
-    traffic: Traffic,
-}
-
-fn since(before: Traffic, after: Traffic) -> Traffic {
-    Traffic {
-        sightings: after.sightings - before.sightings,
-        written: after.written - before.written,
-        naps: after.naps - before.naps,
-        unexpected: after.unexpected - before.unexpected,
-        unexpected_written: after.unexpected_written - before.unexpected_written,
-    }
-}
-
-fn live(mind: &mut Learner, config: Config, seed: u64, steps: usize) -> Result<Stay, SimError> {
-    let mut sim = Sim::new(config, seed)?;
-    let mut eaten: HashSet<Pos> = HashSet::new();
-    let mut stay = Stay::default();
-    let before = mind.model().traffic();
-    for t in 0..steps {
-        let here = sim.pos();
-        if t < WINDOW {
-            stay.hopes += false_hopes(mind, &sim, &eaten);
-        }
-        let outcome = sim.step(mind.act(&sim.observe()));
-        mind.feel(&outcome);
-        stay.sleeps += u32::from(outcome.slept);
-        match outcome.event {
-            Event::Ate => {
-                stay.meals += 1;
-                eaten.insert(here);
-            }
-            Event::AteNothing if t < WINDOW && eaten.contains(&here) => stay.futile += 1,
-            _ => {}
-        }
-    }
-    stay.traffic = since(before, mind.model().traffic());
-    Ok(stay)
-}
-
-/// Squares it ate from, now in view and empty, to which it gave more than
-/// even odds of food just before looking.
-fn false_hopes(mind: &Learner, sim: &Sim, eaten: &HashSet<Pos>) -> u32 {
-    let start = sim.start();
-    let mut hopes = 0;
-    for dy in -1..=1 {
-        for dx in -1..=1 {
-            let at = sim.pos().shift(dx, dy);
-            if !eaten.contains(&at) || sim.grid().get(at) == Cell::Food {
-                continue;
-            }
-            let belief = mind.model().predict(at.shift(-start.x, -start.y));
-            hopes += u32::from(belief[kind(Cell::Food)] > HOPE);
-        }
-    }
-    hopes
-}
-
-/// Bush and barren worlds in turn, ending in the kind unlike `next`, then
-/// a new world like `next`.
-fn upbringing_then(
-    recall: Recall,
-    seed: u64,
-    next: Config,
-    steps: usize,
-) -> Result<(Stay, Stay), SimError> {
-    let memory = Memory::new(Rates::default(), recall);
-    let mut mind = Apprentice::with_model(Drives::default(), memory, seed);
-    let (last, other) = if next.regrowth == Regrowth::Anywhere {
-        (bushes(), barren())
-    } else {
-        (barren(), bushes())
-    };
-    let mut raised = Stay::default();
-    for i in 0..UPBRINGING {
-        let config = if (UPBRINGING - i) % 2 == 1 {
-            last.clone()
-        } else {
-            other.clone()
-        };
-        let stay = live(&mut mind, config, seed + 100 * i, WORLD_STEPS)?;
-        raised.sleeps += stay.sleeps;
-        raised.traffic = add(raised.traffic, stay.traffic);
-    }
-    let offset = if next.regrowth == Regrowth::Anywhere {
-        5_000
-    } else {
-        6_000
-    };
-    Ok((raised, live(&mut mind, next, seed + offset, steps)?))
-}
-
-fn add(a: Traffic, b: Traffic) -> Traffic {
-    Traffic {
-        sightings: a.sightings + b.sightings,
-        written: a.written + b.written,
-        naps: a.naps + b.naps,
-        unexpected: a.unexpected + b.unexpected,
-        unexpected_written: a.unexpected_written + b.unexpected_written,
-    }
-}
-
-/// Wrong answers to "is this home?" over the five trials, after `ASKED`
-/// steps and after `TRIAL_STEPS`.
-fn home_test(recall: Recall, seed: u64) -> Result<(u32, u32), SimError> {
-    let places = [Place::Home, Place::Changed]
-        .into_iter()
-        .chain((0..STRANGERS).map(Place::Stranger));
-    let mut wrong = (0, 0);
-    for place in places {
-        let (mut mind, home, home_map) = at_home_with(recall, seed)?;
-        let mut sim = world(place, &home, seed);
-        for s in 1..=TRIAL_STEPS {
-            step(&mut sim, &mut mind);
-            let right = (mind.map_in_use() == home_map) == place.is_home();
-            if s == ASKED {
-                wrong.0 += u32::from(!right);
-            }
-            if s == TRIAL_STEPS {
-                wrong.1 += u32::from(!right);
-            }
-        }
-    }
-    Ok(wrong)
-}
-
-/// A named per-seed measure.
-type Measure = (&'static str, fn(&Life) -> f64);
-
-/// Everything one seed showed under one setting.
-#[derive(Debug, Clone, Copy)]
-struct Life {
-    raised: Stay,
-    bush: Stay,
-    barren: Stay,
-    /// Wrong home-test answers after `ASKED` and `TRIAL_STEPS` steps.
-    home: (u32, u32),
-}
-
-fn life(recall: Recall, seed: u64) -> Result<Life, SimError> {
-    let (raised, bush) = upbringing_then(recall, seed, bushes(), BUSH_STEPS)?;
-    let (_, barren) = upbringing_then(recall, seed, barren(), BARREN_STEPS)?;
-    Ok(Life {
-        raised,
-        bush,
-        barren,
-        home: home_test(recall, seed)?,
-    })
-}
 
 /// Share of unexpected sightings written; 1 when there were none.
 fn let_through(t: &Traffic) -> f64 {
@@ -272,46 +79,6 @@ fn parse(args: &[String]) -> Result<Args, String> {
         capacity,
         out,
     })
-}
-
-/// Lives every seed both ways, spread over the machine's cores.
-fn lives(
-    seeds: &[u64],
-    gate: Gate,
-    capacity: Option<usize>,
-) -> Result<Vec<(u64, Life, Life)>, Error> {
-    let off = Recall::default();
-    let on = Recall {
-        gate: Some(gate),
-        capacity: capacity.unwrap_or(off.capacity),
-        ..off
-    };
-    let workers = thread::available_parallelism().map_or(1, |n| n.get());
-    let chunk = seeds.len().div_ceil(workers);
-    let results: Vec<Result<Vec<_>, SimError>> = thread::scope(|scope| {
-        let handles: Vec<_> = seeds
-            .chunks(chunk)
-            .map(|part| {
-                scope.spawn(move || {
-                    part.iter()
-                        .map(|&seed| Ok((seed, life(off, seed)?, life(on, seed)?)))
-                        .collect()
-                })
-            })
-            .collect();
-        handles
-            .into_iter()
-            .map(|h| h.join().unwrap_or_else(|_| Ok(Vec::new())))
-            .collect()
-    });
-    let mut all = Vec::new();
-    for part in results {
-        all.extend(part?);
-    }
-    if all.len() != seeds.len() {
-        return Err("a worker thread panicked".into());
-    }
-    Ok(all)
 }
 
 fn csv(rows: &[(u64, Life, Life)]) -> String {
@@ -435,7 +202,13 @@ fn report(rows: &[(u64, Life, Life)]) -> Result<(), Error> {
 }
 
 fn execute(args: &Args) -> Result<(), Error> {
-    let rows = lives(&args.seeds, args.gate, args.capacity)?;
+    let off = Recall::default();
+    let on = Recall {
+        gate: Some(args.gate),
+        capacity: args.capacity.unwrap_or(off.capacity),
+        ..off
+    };
+    let rows = lives(&args.seeds, off, on)?;
     report(&rows)?;
     fs::create_dir_all(&args.out)?;
     fs::write(args.out.join("gate.csv"), csv(&rows))?;
