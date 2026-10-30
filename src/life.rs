@@ -115,14 +115,13 @@ fn false_hopes(mind: &Learner, sim: &Sim, eaten: &HashSet<Pos>) -> u32 {
     hopes
 }
 
-/// Bush and barren worlds in turn, ending in the kind unlike `next`, then
-/// a new world like `next`: each upbringing world, and the new world.
-fn upbringing_then(
+/// An apprentice raised in bush and barren worlds in turn, ending in the
+/// kind unlike `next`: the mind, and each upbringing world.
+pub fn raise(
     setting: Setting,
     seed: u64,
-    next: Config,
-    steps: usize,
-) -> Result<([Stay; RAISED], Stay), SimError> {
+    next: &Config,
+) -> Result<(Learner, [Stay; RAISED]), SimError> {
     let memory = Memory::new(Rates::default(), setting.recall);
     let mut mind = Apprentice::with_model(setting.drives, memory, seed);
     let (last, other) = if next.regrowth == Regrowth::Anywhere {
@@ -139,12 +138,36 @@ fn upbringing_then(
         };
         *slot = live(&mut mind, config, seed + 100 * i, WORLD_STEPS)?;
     }
-    let offset = if next.regrowth == Regrowth::Anywhere {
+    Ok((mind, raised))
+}
+
+/// Seed offset of the new world like `next` after an upbringing.
+fn offset(next: &Config) -> u64 {
+    if next.regrowth == Regrowth::Anywhere {
         5_000
     } else {
         6_000
-    };
-    Ok((raised, live(&mut mind, next, seed + offset, steps)?))
+    }
+}
+
+/// The new barren world after a bush-last upbringing on `seed`.
+pub fn barren_test(mind: &mut Learner, seed: u64) -> Result<Stay, SimError> {
+    let next = barren();
+    let seed = seed + offset(&next);
+    live(mind, next, seed, BARREN_STEPS)
+}
+
+/// [`raise`], then a new world like `next`: each upbringing world, and the
+/// new world.
+fn upbringing_then(
+    setting: Setting,
+    seed: u64,
+    next: Config,
+    steps: usize,
+) -> Result<([Stay; RAISED], Stay), SimError> {
+    let (mut mind, raised) = raise(setting, seed, &next)?;
+    let seed = seed + offset(&next);
+    Ok((raised, live(&mut mind, next, seed, steps)?))
 }
 
 fn add(a: Traffic, b: Traffic) -> Traffic {
