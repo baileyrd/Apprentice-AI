@@ -59,3 +59,21 @@ same arms without revisit).
 My guess before running: 2 met; 1 unclear; 3 missed (PR #26 suggests the
 decline has more than one part); 4 at risk on bush sleeps, since looking
 around costs steps in a world where the known bushes already feed it.
+
+## Tuning (seeds 101–110)
+
+`cargo run --release --bin revisit` (means per life):
+
+| revisit | Barren test sleeps/1k | Barren test meals/1k | Bush test sleeps |
+|---|---|---|---|
+| 0 (default) | 28.1 | — | 7.0 |
+| 1/64 | 4.1 | 69.2 | 14.2 (over the guard) |
+| **1/128** | **2.8** | **71.6** | **6.5** |
+| 1/256 | 3.2 | 71.4 | 5.5 |
+| 1/512 | 7.0 | 65.7 | 7.6 |
+
+The rule picks **1/128**: fewest barren sleeps with bush sleeps within 10%
+of the default (the guard is 7.7). Only 1/128 is judged. The effect is far
+larger than the decline it was aimed at (a newborn sleeps 25 per 1,000
+steps): in a barren world, food regrows anywhere, so a patrol that keeps
+going back to squares it hasn't seen for a while keeps finding it.
