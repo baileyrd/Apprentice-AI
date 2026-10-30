@@ -3,8 +3,9 @@
 //! The apprentice stands in the centre of five boxes laid out in a plus and
 //! faces one of the four side boxes. It senses only the box it faces, as
 //! raw noisy numbers with no label, and acts through bare motors whose
-//! effects it must find out: turn left, turn right, or do nothing. A
-//! [`Learner`] (the predictive-coding [`Net`], unchanged) predicts what it
+//! effects it must find out: turn left, turn right, do nothing, and in the
+//! walking stage step forward. It may also have an innate heading ring
+//! ([`World::ring`]). A [`Learner`] (the predictive-coding [`Net`], unchanged) predicts what it
 //! will sense next. A [`Probe`] reads its heading off the hidden layer, for
 //! scoring only. Rules are in `docs/facing/README.md`.
 //!
@@ -34,6 +35,9 @@ pub enum Stage {
     Turning,
     /// The north and south boxes look the same.
     Matching,
+    /// Matching, plus a forward motor that steps between the centre and
+    /// the side boxes; beyond the plus is dark.
+    Walking,
 }
 
 impl Stage {
@@ -41,10 +45,15 @@ impl Stage {
     fn sides(self) -> [usize; SIDES] {
         match self {
             Stage::Turning => [0, 1, 2, 3],
-            Stage::Matching => [0, 1, 0, 2],
+            Stage::Matching | Stage::Walking => [0, 1, 0, 2],
         }
     }
 }
+
+/// Look id of the centre box, in the walking stage.
+const CENTRE: usize = 3;
+/// Look id of the dark beyond the plus, in the walking stage.
+const DARK: usize = 4;
 
 /// What a motor does. Hidden from the learner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,6 +61,7 @@ enum Effect {
     Left,
     Right,
     Still,
+    Forward,
 }
 
 /// The five boxes and the body in the centre.
@@ -61,8 +71,14 @@ pub struct World {
     looks: Vec<Sense>,
     sides: [usize; SIDES],
     heading: usize,
+    /// The side box it stands in; `None` is the centre.
+    at: Option<usize>,
     /// What motor `i` does, shuffled per seed.
     motors: Vec<Effect>,
+    /// The ring unit active facing north, and whether the ring runs
+    /// against the compass. Drawn per seed, so the ring is unlabelled.
+    ring_phase: usize,
+    ring_flipped: bool,
     rng: Rng,
 }
 
@@ -71,16 +87,31 @@ impl World {
     pub fn new(stage: Stage, seed: u64) -> Self {
         let mut rng = Rng::new(seed);
         let sides = stage.sides();
-        let kinds = sides.iter().max().map_or(0, |m| m + 1);
-        let looks = distinct_patterns(kinds, &mut rng);
+        let walking = stage == Stage::Walking;
+        // Patterned looks: the side boxes', and in walking the centre's.
+        let kinds = match stage {
+            Stage::Turning => 4,
+            Stage::Matching => 3,
+            Stage::Walking => CENTRE + 1,
+        };
+        let mut looks = distinct_patterns(kinds, &mut rng);
         let mut motors = vec![Effect::Left, Effect::Right, Effect::Still];
+        if walking {
+            looks.push([0.0; FEATURES]);
+            motors.push(Effect::Forward);
+        }
         shuffle(&mut motors, &mut rng);
         let heading = rng.below(SIDES);
+        // Its own stream, so adding the ring changes nothing else.
+        let mut ring_rng = Rng::new(seed ^ 0x0219);
         Self {
             looks,
             sides,
             heading,
+            at: None,
             motors,
+            ring_phase: ring_rng.below(SIDES),
+            ring_flipped: ring_rng.chance(0.5),
             rng,
         }
     }
@@ -103,9 +134,41 @@ impl World {
         &self.looks
     }
 
-    /// Look id of the box it faces. For scoring only.
+    /// Look id of what it faces. For scoring only.
     pub fn faced(&self) -> usize {
-        self.sides[self.heading]
+        match self.at {
+            None => self.sides[self.heading],
+            Some(side) if self.heading == opposite(side) => CENTRE,
+            Some(_) => DARK,
+        }
+    }
+
+    /// The side box it stands in; `None` is the centre. For scoring only.
+    pub fn at(&self) -> Option<usize> {
+        self.at
+    }
+
+    /// The innate heading ring: one unit active, shifting one way on a
+    /// left turn and the other on a right turn. Which unit means north,
+    /// and which way round it runs, are drawn per seed.
+    pub fn ring(&self) -> [f64; SIDES] {
+        let turned = if self.ring_flipped {
+            SIDES - self.heading
+        } else {
+            self.heading
+        };
+        let mut units = [0.0; SIDES];
+        units[(self.ring_phase + turned) % SIDES] = 1.0;
+        units
+    }
+
+    /// What it senses, and the ring after it if `ring`.
+    pub fn percept(&mut self, ring: bool) -> Vec<f64> {
+        let mut p = self.sense().to_vec();
+        if ring {
+            p.extend(self.ring());
+        }
+        p
     }
 
     /// Which side box it faces, 0 = north. For scoring only.
@@ -115,7 +178,8 @@ impl World {
 
     /// Whether the box it faces looks like another box. For scoring only.
     pub fn faces_matching(&self) -> bool {
-        self.sides.iter().filter(|&&l| l == self.faced()).count() > 1
+        let faced = self.faced();
+        self.sides.iter().filter(|&&l| l == faced).count() > 1
     }
 
     /// Senses the box it faces: its look plus fresh noise.
@@ -129,15 +193,31 @@ impl World {
 
     /// Fires `motor`. A motor it doesn't have is wired to nothing.
     pub fn fire(&mut self, motor: usize) {
-        self.heading = match self.motors.get(motor) {
-            Some(Effect::Left) => (self.heading + SIDES - 1) % SIDES,
-            Some(Effect::Right) => (self.heading + 1) % SIDES,
-            Some(Effect::Still) | None => self.heading,
+        match self.motors.get(motor) {
+            Some(Effect::Left) => self.heading = (self.heading + SIDES - 1) % SIDES,
+            Some(Effect::Right) => self.heading = (self.heading + 1) % SIDES,
+            Some(Effect::Forward) => self.step_forward(),
+            Some(Effect::Still) | None => {}
+        }
+    }
+
+    /// From the centre, into the faced box; from a side box, back to the
+    /// centre if facing it; into the dark, nowhere.
+    fn step_forward(&mut self) {
+        self.at = match self.at {
+            None => Some(self.heading),
+            Some(side) if self.heading == opposite(side) => None,
+            stay => stay,
         };
     }
 }
 
-/// The body's driver: stares a random while, then turns a random way.
+fn opposite(side: usize) -> usize {
+    (side + 2) % SIDES
+}
+
+/// The body's driver: stares a random while, then fires a random other
+/// motor (a turn, or in walking, a step forward).
 /// Stare lengths are geometric (0, 1, 2…, mean 3), so some last past 10.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Driver {
@@ -212,6 +292,8 @@ pub enum Memory {
 pub struct Learner {
     net: Net,
     memory: Memory,
+    /// Numbers in one percept: the senses, then the ring if it has one.
+    percept: usize,
     motors: usize,
     /// What it carries into the next step.
     recall: Vec<f64>,
@@ -224,11 +306,18 @@ const LEARNING: Learning = Learning::PredictiveCoding {
 };
 
 impl Learner {
-    /// A learner for a body with `motors` motors.
-    pub fn new(memory: Memory, motors: usize, rate: f64, seed: u64) -> Result<Self, NetError> {
+    /// A learner for a body with `motors` motors and percepts of
+    /// `percept` numbers. It predicts the next whole percept.
+    pub fn new(
+        memory: Memory,
+        percept: usize,
+        motors: usize,
+        rate: f64,
+        seed: u64,
+    ) -> Result<Self, NetError> {
         let recall = match memory {
             Memory::None => 0,
-            Memory::Recent(k) => k * (FEATURES + motors),
+            Memory::Recent(k) => k * (percept + motors),
             Memory::Context | Memory::Gated => HIDDEN,
         };
         // One block of [sense, recall] per motor when gated, else one.
@@ -236,9 +325,9 @@ impl Learner {
         // Memory widens the input, and a delta rule's step grows with the
         // active input's size; scale the rate so every memory learns at the
         // same pace per step.
-        let now = FEATURES + motors;
+        let now = percept + motors;
         let net = Net::new(
-            &[blocks * (FEATURES + recall) + motors, HIDDEN, FEATURES],
+            &[blocks * (percept + recall) + motors, HIDDEN, percept],
             rate * now as f64 / (now + recall) as f64,
             LEARNING,
             seed,
@@ -246,6 +335,7 @@ impl Learner {
         Ok(Self {
             net,
             memory,
+            percept,
             motors,
             recall: vec![0.0; recall],
         })
@@ -283,11 +373,12 @@ impl Learner {
             x.extend_from_slice(recall);
             return x;
         }
-        let block = FEATURES + recall.len();
+        let p = self.percept;
+        let block = p + recall.len();
         let mut x = vec![0.0; self.motors * block];
         if let Some(active) = x.get_mut(motor * block..(motor + 1) * block) {
-            active[..FEATURES].copy_from_slice(&sense[..FEATURES]);
-            active[FEATURES..].copy_from_slice(recall);
+            active[..p].copy_from_slice(&sense[..p]);
+            active[p..].copy_from_slice(recall);
         }
         x.extend(one_hot(motor, self.motors));
         x
@@ -309,36 +400,37 @@ impl Learner {
     }
 }
 
-/// A linear readout of heading from hidden activity, learned by a delta
-/// rule. Scoring only: the learner never sees it.
+/// A linear readout of one of `classes` facts (heading, or where it
+/// stands) from hidden activity, learned by a delta rule. Scoring only: the
+/// learner never sees it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Probe {
-    /// One row per heading: weights, then bias.
-    rows: [[f64; HIDDEN + 1]; SIDES],
+    /// One row per class: weights, then bias.
+    rows: Vec<[f64; HIDDEN + 1]>,
     rate: f64,
 }
 
 impl Probe {
-    pub fn new(rate: f64) -> Self {
+    pub fn new(classes: usize, rate: f64) -> Self {
         Self {
-            rows: [[0.0; HIDDEN + 1]; SIDES],
+            rows: vec![[0.0; HIDDEN + 1]; classes],
             rate,
         }
     }
 
-    /// The heading it reads off `hidden`.
+    /// The class it reads off `hidden`.
     pub fn read(&self, hidden: &[f64]) -> usize {
         let scores = self.scores(hidden);
-        (0..SIDES)
+        (0..scores.len())
             .max_by(|&a, &b| scores[a].total_cmp(&scores[b]))
             .unwrap_or(0)
     }
 
-    /// Learns that `hidden` came with `heading`.
-    pub fn learn(&mut self, hidden: &[f64], heading: usize) {
+    /// Learns that `hidden` came with `class`.
+    pub fn learn(&mut self, hidden: &[f64], class: usize) {
         let scores = self.scores(hidden);
-        for (h, row) in self.rows.iter_mut().enumerate() {
-            let e = if h == heading { 1.0 } else { 0.0 } - scores[h];
+        for (c, row) in self.rows.iter_mut().enumerate() {
+            let e = if c == class { 1.0 } else { 0.0 } - scores[c];
             for (w, a) in row.iter_mut().zip(hidden) {
                 *w += self.rate * e * a;
             }
@@ -346,10 +438,18 @@ impl Probe {
         }
     }
 
-    fn scores(&self, hidden: &[f64]) -> [f64; SIDES] {
+    fn scores(&self, hidden: &[f64]) -> Vec<f64> {
         self.rows
+            .iter()
             .map(|row| row[HIDDEN] + row.iter().zip(hidden).map(|(w, a)| w * a).sum::<f64>())
+            .collect()
     }
+}
+
+/// Where it stands as a probe class: a side box, or [`SIDES`] for the
+/// centre.
+fn place(at: Option<usize>) -> usize {
+    at.unwrap_or(SIDES)
 }
 
 /// Accuracies at the end of a life. Each is `None` when nothing counted.
@@ -363,11 +463,18 @@ pub struct Score {
     /// Next view after turns that end a stare of [`LONG_STARE`] or more,
     /// over the second half of the life.
     pub after_stare: Option<f64>,
-    /// Heading read off the hidden layer, on the last `window` turns.
+    /// Heading read off the hidden layer by a probe frozen for the second
+    /// half of the life, on the last `window` turns.
     pub probe: Option<f64>,
     /// The same, on the last `window` turns that start facing a matching
     /// box, where the view can't tell heading.
     pub probe_matching: Option<f64>,
+    /// Share of the more common heading among those same turns: what
+    /// always guessing it would score.
+    pub majority_matching: Option<f64>,
+    /// Where it stands (centre or which side box), read off the hidden
+    /// layer by a frozen probe, on the last `window` scored steps.
+    pub probe_place: Option<f64>,
 }
 
 /// A stare this long or longer counts as long.
@@ -378,6 +485,8 @@ pub const LONG_STARE: u32 = 5;
 pub struct Life {
     pub stage: Stage,
     pub memory: Memory,
+    /// Whether it has the innate heading ring.
+    pub ring: bool,
     pub steps: usize,
     pub rate: f64,
     /// Turns at the end over which it is scored.
@@ -387,12 +496,20 @@ pub struct Life {
 /// Lives `life` on `seed` and scores it.
 pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
     let mut world = World::new(life.stage, seed);
-    let mut learner = Learner::new(life.memory, world.motors(), life.rate, seed ^ 0x5eed)?;
+    let percept = FEATURES + if life.ring { SIDES } else { 0 };
+    let mut learner = Learner::new(
+        life.memory,
+        percept,
+        world.motors(),
+        life.rate,
+        seed ^ 0x5eed,
+    )?;
     let mut driver = Driver::new(&world, seed ^ 0xd21e);
-    let mut probe = Probe::new(0.02);
+    let (mut probe, mut place_probe) = (Probe::new(SIDES, 0.02), Probe::new(SIDES + 1, 0.02));
+    let mut places = vec![];
     let (mut ones, mut twos, mut probes, mut long) = (vec![], vec![], vec![], vec![]);
-    let mut probes_matching = vec![];
-    let mut sense = world.sense();
+    let (mut probes_matching, mut headings_matching) = (vec![], vec![]);
+    let mut sense = world.percept(life.ring);
     let mut now = driver.drive();
     let mut two_ahead: Option<usize> = None;
     for t in 0..life.steps {
@@ -402,8 +519,9 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
         let hidden = learner.hidden(&sense, motor);
         let heading = world.heading();
         let matching = world.faces_matching();
+        let stands = place(world.at());
         world.fire(motor);
-        let next = world.sense();
+        let next = world.percept(life.ring);
         let truth = world.faced();
         let looks = world.looks();
         if let Some(stared) = stared {
@@ -411,8 +529,10 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
             ones.push(hit);
             let read = probe.read(&hidden) == heading;
             probes.push(read);
+            places.push(place_probe.read(&hidden) == stands);
             if matching {
                 probes_matching.push(read);
+                headings_matching.push(heading);
             }
             if stared >= LONG_STARE && t >= life.steps / 2 {
                 long.push(hit);
@@ -422,7 +542,12 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
             }
         }
         two_ahead = after.1.map(|_| nearest(looks, &two));
-        probe.learn(&hidden, heading);
+        // Frozen for the second half: a probe still learning would carry
+        // heading through a stare in its own weights.
+        if t < life.steps / 2 {
+            probe.learn(&hidden, heading);
+            place_probe.learn(&hidden, stands);
+        }
         learner.learn(&sense, motor, &next);
         sense = next;
         now = after;
@@ -433,7 +558,18 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
         after_stare: tail_rate(&long, long.len()),
         probe: tail_rate(&probes, life.window),
         probe_matching: tail_rate(&probes_matching, life.window),
+        majority_matching: majority(&headings_matching, life.window),
+        probe_place: tail_rate(&places, life.window),
     })
+}
+
+/// Share of the most common value among the last `window` entries.
+fn majority(values: &[usize], window: usize) -> Option<f64> {
+    let tail = &values[values.len().saturating_sub(window)..];
+    let most = (0..SIDES)
+        .map(|v| tail.iter().filter(|&&x| x == v).count())
+        .max()?;
+    (!tail.is_empty()).then(|| most as f64 / tail.len() as f64)
 }
 
 /// Look id whose pattern is closest to `v`.
@@ -580,7 +716,7 @@ mod tests {
 
     #[test]
     fn recent_memory_keeps_the_last_k_steps_newest_first() {
-        let mut l = Learner::new(Memory::Recent(2), 3, 0.05, 0).expect("shape");
+        let mut l = Learner::new(Memory::Recent(2), FEATURES, 3, 0.05, 0).expect("shape");
         let (a, b) = ([0.5; FEATURES], [-0.5; FEATURES]);
         l.learn(&a, 0, &b);
         l.learn(&b, 2, &a);
@@ -592,7 +728,7 @@ mod tests {
 
     #[test]
     fn gated_input_fills_only_the_fired_motors_block() {
-        let l = Learner::new(Memory::Gated, 3, 0.05, 0).expect("shape");
+        let l = Learner::new(Memory::Gated, FEATURES, 3, 0.05, 0).expect("shape");
         let x = l.input(&[0.25; HIDDEN], &[1.0; FEATURES], 1);
         let block = FEATURES + HIDDEN;
         assert_eq!(x.len(), 3 * block + 3);
@@ -617,8 +753,59 @@ mod tests {
     }
 
     #[test]
+    fn ring_shifts_with_turns_only_and_comes_back() {
+        let mut w = World::new(Stage::Walking, 9);
+        let start = w.ring();
+        assert_eq!(start.iter().sum::<f64>(), 1.0);
+        w.fire(motor(&w, Effect::Right));
+        let turned = w.ring();
+        assert_ne!(turned, start);
+        w.fire(motor(&w, Effect::Forward));
+        w.fire(w.still_motor());
+        assert_eq!(w.ring(), turned);
+        for _ in 0..3 {
+            w.fire(motor(&w, Effect::Right));
+        }
+        assert_eq!(w.ring(), start);
+    }
+
+    #[test]
+    fn walking_steps_into_a_box_and_back() {
+        let mut w = World::new(Stage::Walking, 10);
+        let (forward, right) = (motor(&w, Effect::Forward), motor(&w, Effect::Right));
+        let side = w.heading();
+        let ahead = w.faced();
+        w.fire(forward);
+        assert_eq!(w.at(), Some(side));
+        assert_eq!(w.faced(), DARK);
+        w.fire(forward);
+        assert_eq!(w.at(), Some(side), "the dark doesn't let it through");
+        w.fire(right);
+        w.fire(right);
+        assert_eq!(w.faced(), CENTRE);
+        w.fire(forward);
+        assert_eq!(w.at(), None);
+        assert_eq!(w.faced(), w.sides[opposite(side)]);
+        assert!(w.sides.contains(&ahead));
+    }
+
+    #[test]
+    fn dark_and_centre_decode_apart_from_the_side_boxes() {
+        let w = World::new(Stage::Walking, 11);
+        assert_eq!(w.looks().len(), 5);
+        assert_eq!(nearest(w.looks(), &[0.0; FEATURES]), DARK);
+        assert_eq!(nearest(w.looks(), &w.looks()[CENTRE]), CENTRE);
+    }
+
+    #[test]
+    fn majority_reads_the_window() {
+        assert_eq!(majority(&[0, 2, 2, 0, 0], 4), Some(0.5));
+        assert_eq!(majority(&[], 4), None);
+    }
+
+    #[test]
     fn probe_learns_a_separable_heading() {
-        let mut p = Probe::new(0.05);
+        let mut p = Probe::new(SIDES, 0.05);
         let code = |h: usize| -> Vec<f64> { (0..HIDDEN).map(|i| f64::from(i % 4 == h)).collect() };
         for t in 0..400 {
             p.learn(&code(t % 4), t % 4);
@@ -631,6 +818,7 @@ mod tests {
         let life = Life {
             stage: Stage::Turning,
             memory: Memory::None,
+            ring: false,
             steps: 8_000,
             rate: 0.05,
             window: 100,

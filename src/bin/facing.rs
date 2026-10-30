@@ -8,13 +8,14 @@ use std::thread;
 use apprentice::facing::{Life, Memory, Score, Stage, live};
 
 const USAGE: &str = "\
-usage: facing [--stage turning|matching] [--seeds N] [--from SEED] [--judge]
-              [--steps S] [--rate R]
+usage: facing [--stage turning|matching|walking] [--ring] [--seeds N]
+              [--from SEED] [--judge] [--steps S] [--rate R]
 
 Seeds FROM..FROM+N-1 (default 101..110, the tuning seeds), or with --judge
 seeds 1-20. Runs every memory on the stage (default turning) for S steps
 (default: the stage's budget) at learning rate R (default 0.05), prints
-each memory's scores and verdict.";
+each memory's scores and verdict. With --ring every learner also gets the
+innate heading ring.";
 
 /// Turns at the end over which accuracy is scored.
 const WINDOW: usize = 100;
@@ -34,12 +35,14 @@ struct Args {
     seeds: Vec<u64>,
     steps: Option<usize>,
     rate: f64,
+    ring: bool,
 }
 
 fn budget(stage: Stage) -> usize {
     match stage {
         Stage::Turning => 8_000,
         Stage::Matching => 20_000,
+        Stage::Walking => 40_000,
     }
 }
 
@@ -49,10 +52,15 @@ fn parse(args: &[String]) -> Result<Args, String> {
         seeds: (101..111).collect(),
         steps: None,
         rate: 0.05,
+        ring: false,
     };
     let (mut n, mut from) = (10, 101);
     let mut it = args.iter();
     while let Some(flag) = it.next() {
+        if flag == "--ring" {
+            a.ring = true;
+            continue;
+        }
         if flag == "--judge" {
             a.seeds = (1..21).collect();
             continue;
@@ -64,6 +72,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
                 a.stage = match value.as_str() {
                     "turning" => Stage::Turning,
                     "matching" => Stage::Matching,
+                    "walking" => Stage::Walking,
                     _ => return Err(format!("unknown stage {value}")),
                 }
             }
@@ -100,7 +109,7 @@ fn passes(stage: Stage, s: &Score) -> bool {
     let at_least = |x: Option<f64>, mark: f64| x.is_some_and(|x| x >= mark);
     let long = match stage {
         Stage::Turning => true,
-        Stage::Matching => at_least(s.after_stare, PASS_LONG),
+        Stage::Matching | Stage::Walking => at_least(s.after_stare, PASS_LONG),
     };
     at_least(s.one, PASS_ONE) && at_least(s.two, PASS_TWO) && long
 }
@@ -124,13 +133,15 @@ fn report(stage: Stage, memory: Memory, seeds: &[u64], scores: &[Score]) -> usiz
     let col = |f: fn(&Score) -> Option<f64>| median(scores.iter().filter_map(f).collect());
     let passed = scores.iter().filter(|s| passes(stage, s)).count();
     println!(
-        "{:<10} {:>6.2} {:>6.2} {:>8.2} {:>6.2} {:>9.2}   {passed}/{}",
+        "{:<10} {:>6.2} {:>6.2} {:>8.2} {:>6.2} {:>9.2} {:>8.2} {:>6.2}   {passed}/{}",
         name(memory),
         col(|s| s.one),
         col(|s| s.two),
         col(|s| s.after_stare),
         col(|s| s.probe),
         col(|s| s.probe_matching),
+        col(|s| s.majority_matching),
+        col(|s| s.probe_place),
         scores.len(),
     );
     let missed: Vec<u64> = seeds
@@ -148,12 +159,13 @@ fn report(stage: Stage, memory: Memory, seeds: &[u64], scores: &[Score]) -> usiz
 fn execute(a: &Args) -> Result<(), String> {
     let steps = a.steps.unwrap_or(budget(a.stage));
     println!(
-        "stage {:?}, {steps} steps, seeds {:?}..={:?}",
+        "stage {:?}, ring {}, {steps} steps, seeds {:?}..={:?}",
         a.stage,
+        a.ring,
         a.seeds.first(),
         a.seeds.last()
     );
-    println!("memory     one    two  stare5+  probe  probe NS   passed (medians)");
+    println!("memory     one    two  stare5+  probe  probe NS  most NS  place   passed (medians)");
     let need = (PASS_SHARE * a.seeds.len() as f64).ceil() as usize;
     for memory in [
         Memory::None,
@@ -164,6 +176,7 @@ fn execute(a: &Args) -> Result<(), String> {
         let life = Life {
             stage: a.stage,
             memory,
+            ring: a.ring,
             steps,
             rate: a.rate,
             window: WINDOW,
@@ -171,6 +184,7 @@ fn execute(a: &Args) -> Result<(), String> {
         let scores = run(life, &a.seeds)?;
         let passed = report(a.stage, memory, &a.seeds, &scores);
         let leak = a.stage == Stage::Matching
+            && !a.ring
             && memory == Memory::None
             && median(scores.iter().filter_map(|s| s.one).collect()) > NO_MEMORY_CEILING;
         if leak {
