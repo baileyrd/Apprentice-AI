@@ -223,24 +223,24 @@ pub enum Source {
 
 /// A sighting in the diary, with the square's state, that state's age and
 /// its word just before it, and its "surprise".
-type Sighting = (Pos, Cell, Option<(Last, u64, Option<Said>)>, f64);
+type Sighting = (Pos, Cell, Option<(Last, u64, u64, Option<Said>)>, f64);
 
 /// A sighting that confirmed a pattern: the square's state, the start of
 /// its age group (with fair mix, its age), any word said, and what was seen.
-type Confirmation = (Last, u64, Option<Said>, Cell);
+type Confirmation = (Last, u64, u64, Option<Said>, Cell);
 
 /// What a pattern learns from: a square's state, its age, any word said,
 /// and what was seen.
-type Sample = (Last, u64, Option<Said>, Cell);
+type Sample = (Last, u64, u64, Option<Said>, Cell);
 
 /// What a diary entry teaches the patterns; `None` for a square never seen.
 fn sample(e: &Sighting) -> Option<Sample> {
-    e.2.map(|(last, age, said)| (last, age, said, e.1))
+    e.2.map(|(last, age, unseen, said)| (last, age, unseen, said, e.1))
 }
 
 /// Whether an entry saw its square change from how it last looked.
 fn changed(e: &Sighting) -> bool {
-    e.2.is_some_and(|(last, _, _)| last.looks() != e.1)
+    e.2.is_some_and(|(last, _, _, _)| last.looks() != e.1)
 }
 
 /// Like [`chosen`], with the budget split between changes and non-changes
@@ -434,9 +434,10 @@ impl Memory {
     /// Long-term memory's guess about a square in state `before`: patterns,
     /// else the map in use; `None` if it knows neither.
     fn long_term(&self, at: Pos, before: Option<Seen>) -> Option<Belief> {
-        let pattern = before
-            .filter(|_| self.recall.patterns)
-            .and_then(|s| self.patterns.predict(s.last, self.t - s.since, s.said));
+        let pattern = before.filter(|_| self.recall.patterns).and_then(|s| {
+            self.patterns
+                .predict(s.last, self.t - s.since, self.t - s.sensed, s.said)
+        });
         let map = &self.contexts[self.active].map;
         pattern.or_else(|| map.knows(at).then(|| map.predict(at)))
     }
@@ -470,8 +471,12 @@ impl Memory {
             return None;
         }
         let seen = self.contexts[self.active].seen.get(&at)?;
-        self.patterns
-            .predict(seen.last, self.t - seen.since, seen.said)
+        self.patterns.predict(
+            seen.last,
+            self.t - seen.since,
+            self.t - seen.sensed,
+            seen.said,
+        )
     }
 
     /// Index of the map in use.
@@ -531,10 +536,10 @@ impl Memory {
         self.diary.len() - self.settled().0
     }
 
-    /// What its patterns say a square in state `last`, `age` steps old, is
-    /// now; `None` until that pattern is learned.
+    /// What its patterns say a square in state `last`, `age` steps old and
+    /// unseen since, is now; `None` until that pattern is learned.
     pub fn expects(&self, last: Last, age: u64) -> Option<Belief> {
-        self.patterns.predict(last, age, None)
+        self.patterns.predict(last, age, age, None)
     }
 
     /// What its patterns say a square in state `last`, `age` steps old, that
@@ -602,8 +607,8 @@ impl Memory {
         self.last_sleep = self.t;
     }
 
-    fn teach(&mut self, (last, age, said, sensed): Sample) {
-        self.patterns.learn(last, age, said, sensed);
+    fn teach(&mut self, (last, age, unseen, said, sensed): Sample) {
+        self.patterns.learn(last, age, unseen, said, sensed);
         self.traffic.taught += 1;
     }
 
@@ -778,20 +783,21 @@ impl WorldModel for Memory {
         }
         if written {
             self.fast.insert(at, fast);
-            let state = before.map(|s| (s.last, t - s.since, s.said));
+            let state = before.map(|s| (s.last, t - s.since, t - s.sensed, s.said));
             self.diary.push((at, sensed, state, surprise));
         } else {
             self.confirmed.insert(at);
             if let Some(s) = before {
                 // Fair mix teaches a confirmation at its own age, not its
                 // age group's start, as the diary's entries are taught.
-                let age = t - s.since;
-                let age = if self.recall.fair_mix {
-                    age
-                } else {
-                    group_start(age)
+                let at = |steps: u64| {
+                    if self.recall.fair_mix {
+                        steps
+                    } else {
+                        group_start(steps)
+                    }
                 };
-                let key = (s.last, age, s.said, sensed);
+                let key = (s.last, at(t - s.since), at(t - s.sensed), s.said, sensed);
                 match self.tally.iter_mut().find(|(k, _)| *k == key) {
                     Some((_, n)) => *n += 1,
                     None => self.tally.push((key, 1)),
@@ -815,7 +821,7 @@ impl WorldModel for Memory {
             };
             let expected = state
                 .filter(|s| on && s.last == Last::Ate)
-                .and_then(|s| patterns.predict(s.last, t - s.since, s.said));
+                .and_then(|s| patterns.predict(s.last, t - s.since, t - s.sensed, s.said));
             ctx.judge(at, sensed, rate, expected);
         }
         surprise
@@ -1106,9 +1112,9 @@ mod tests {
         for i in 0..MEALS {
             eat_and_watch(&mut m, Pos { x: 10 * i, y: 0 });
         }
-        assert_eq!(m.patterns.predict(Last::Ate, 40, None), None);
+        assert_eq!(m.patterns.predict(Last::Ate, 40, 40, None), None);
         m.sleep();
-        assert!(m.patterns.predict(Last::Ate, 40, None).is_some());
+        assert!(m.patterns.predict(Last::Ate, 40, 40, None).is_some());
     }
 
     #[test]
@@ -1322,7 +1328,7 @@ mod tests {
 
     #[test]
     fn spread_interleaves_groups_evenly_keeping_their_order() {
-        let s = |n: u64| (Last::Ate, n, None, Cell::Empty);
+        let s = |n: u64| (Last::Ate, n, n, None, Cell::Empty);
         let order = spread(vec![vec![s(1), s(2)], vec![], vec![s(3), s(4), s(5), s(6)]]);
         let ages: Vec<u64> = order.iter().map(|x| x.1).collect();
         assert_eq!(ages, [3, 1, 4, 5, 2, 6]);
@@ -1332,7 +1338,7 @@ mod tests {
     fn a_fair_budget_keeps_the_days_share_of_changes() {
         let entry = |x: i32, seen: Cell, e: f64| {
             let at = Pos { x, y: 0 };
-            (at, seen, Some((Last::Ate, 40, None)), e)
+            (at, seen, Some((Last::Ate, 40, 40, None)), e)
         };
         // One change in four; the three non-changes are the most surprising.
         let diary = [
@@ -1380,7 +1386,14 @@ mod tests {
                 ..Recall::default()
             },
         );
-        let entry = |x: i32, e: f64| (Pos { x, y: 0 }, Cell::Empty, Some((Last::Ate, 5, None)), e);
+        let entry = |x: i32, e: f64| {
+            (
+                Pos { x, y: 0 },
+                Cell::Empty,
+                Some((Last::Ate, 5, 5, None)),
+                e,
+            )
+        };
         m.diary = (0..16).map(|x| entry(x, f64::from(x))).collect();
         m.sleep();
         assert_eq!(m.traffic().taught, 2, "nothing kept to rehearse yet");

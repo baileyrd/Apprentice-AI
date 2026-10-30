@@ -9,7 +9,7 @@ use std::thread;
 
 use crate::adaptation::{Change, Setup};
 use crate::apprentice::{Apprentice, Drives, Mind};
-use crate::home::{Place, at_home_with, step, world};
+use crate::home::{Place, at_home_as, step, world};
 use crate::memory::{Memory, Recall, Traffic};
 use crate::model::{Rates, WorldModel, kind};
 use crate::sim::{Config, Event, Regrowth, Sim, SimError};
@@ -19,6 +19,8 @@ use crate::world::{Cell, Pos};
 pub type Learner = Apprentice<Memory>;
 
 pub const UPBRINGING: u64 = 4;
+/// Upbringing worlds, as a count.
+pub const RAISED: usize = UPBRINGING as usize;
 pub const WORLD_STEPS: usize = 1_000;
 pub const BARREN_STEPS: usize = 2_000;
 pub const BUSH_STEPS: usize = 4_000;
@@ -114,30 +116,28 @@ fn false_hopes(mind: &Learner, sim: &Sim, eaten: &HashSet<Pos>) -> u32 {
 }
 
 /// Bush and barren worlds in turn, ending in the kind unlike `next`, then
-/// a new world like `next`.
+/// a new world like `next`: each upbringing world, and the new world.
 fn upbringing_then(
-    recall: Recall,
+    setting: Setting,
     seed: u64,
     next: Config,
     steps: usize,
-) -> Result<(Stay, Stay), SimError> {
-    let memory = Memory::new(Rates::default(), recall);
-    let mut mind = Apprentice::with_model(Drives::default(), memory, seed);
+) -> Result<([Stay; RAISED], Stay), SimError> {
+    let memory = Memory::new(Rates::default(), setting.recall);
+    let mut mind = Apprentice::with_model(setting.drives, memory, seed);
     let (last, other) = if next.regrowth == Regrowth::Anywhere {
         (bushes(), barren())
     } else {
         (barren(), bushes())
     };
-    let mut raised = Stay::default();
-    for i in 0..UPBRINGING {
+    let mut raised = [Stay::default(); RAISED];
+    for (i, slot) in (0..UPBRINGING).zip(&mut raised) {
         let config = if (UPBRINGING - i) % 2 == 1 {
             last.clone()
         } else {
             other.clone()
         };
-        let stay = live(&mut mind, config, seed + 100 * i, WORLD_STEPS)?;
-        raised.sleeps += stay.sleeps;
-        raised.traffic = add(raised.traffic, stay.traffic);
+        *slot = live(&mut mind, config, seed + 100 * i, WORLD_STEPS)?;
     }
     let offset = if next.regrowth == Regrowth::Anywhere {
         5_000
@@ -161,13 +161,13 @@ fn add(a: Traffic, b: Traffic) -> Traffic {
 
 /// Wrong answers to "is this home?" over the five trials, after `ASKED`
 /// steps and after `TRIAL_STEPS`.
-fn home_test(recall: Recall, seed: u64) -> Result<(u32, u32), SimError> {
+fn home_test(setting: Setting, seed: u64) -> Result<(u32, u32), SimError> {
     let places = [Place::Home, Place::Changed]
         .into_iter()
         .chain((0..STRANGERS).map(Place::Stranger));
     let mut wrong = (0, 0);
     for place in places {
-        let (mut mind, home, home_map) = at_home_with(recall, seed)?;
+        let (mut mind, home, home_map) = at_home_as(setting.recall, setting.drives, seed)?;
         let mut sim = world(place, &home, seed);
         for s in 1..=TRIAL_STEPS {
             step(&mut sim, &mut mind);
@@ -186,24 +186,71 @@ fn home_test(recall: Recall, seed: u64) -> Result<(u32, u32), SimError> {
 /// A named per-seed measure.
 pub type Measure = (&'static str, fn(&Life) -> f64);
 
+/// What a life is lived with: how it remembers and what it wants.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Setting {
+    pub recall: Recall,
+    pub drives: Drives,
+}
+
+impl From<Recall> for Setting {
+    fn from(recall: Recall) -> Self {
+        Self {
+            recall,
+            drives: Drives::default(),
+        }
+    }
+}
+
 /// Everything one seed showed under one setting.
 #[derive(Debug, Clone, Copy)]
 pub struct Life {
+    /// The bush-first upbringing's sleeps and traffic, all four worlds.
     pub raised: Stay,
     pub bush: Stay,
     pub barren: Stay,
     /// Wrong home-test answers after `ASKED` and `TRIAL_STEPS` steps.
     pub home: (u32, u32),
+    /// Each upbringing world before the bush test (bush first) and before
+    /// the barren test (barren first).
+    pub bush_raised: [Stay; RAISED],
+    pub barren_raised: [Stay; RAISED],
 }
 
-pub fn life(recall: Recall, seed: u64) -> Result<Life, SimError> {
-    let (raised, bush) = upbringing_then(recall, seed, bushes(), BUSH_STEPS)?;
-    let (_, barren) = upbringing_then(recall, seed, barren(), BARREN_STEPS)?;
+impl Life {
+    /// Sleeps over the upbringing worlds of both lives that were barren
+    /// (`barren`) or bush (`!barren`).
+    pub fn raised_sleeps(&self, barren: bool) -> u32 {
+        // Bush-first lives have barren worlds at odd places, barren-first
+        // lives at even ones.
+        let pick = |stays: &[Stay; RAISED], odd: bool| -> u32 {
+            stays
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| (i % 2 == 1) == odd)
+                .map(|(_, s)| s.sleeps)
+                .sum()
+        };
+        pick(&self.bush_raised, barren) + pick(&self.barren_raised, !barren)
+    }
+}
+
+pub fn life(setting: impl Into<Setting>, seed: u64) -> Result<Life, SimError> {
+    let setting = setting.into();
+    let (bush_raised, bush) = upbringing_then(setting, seed, bushes(), BUSH_STEPS)?;
+    let (barren_raised, barren) = upbringing_then(setting, seed, barren(), BARREN_STEPS)?;
+    let raised = bush_raised.iter().fold(Stay::default(), |mut all, s| {
+        all.sleeps += s.sleeps;
+        all.traffic = add(all.traffic, s.traffic);
+        all
+    });
     Ok(Life {
         raised,
         bush,
         barren,
-        home: home_test(recall, seed)?,
+        home: home_test(setting, seed)?,
+        bush_raised,
+        barren_raised,
     })
 }
 
@@ -223,9 +270,9 @@ pub fn lives(
 
 /// Lives every seed under each of `settings`, spread over the machine's
 /// cores, in seed order; each seed's lives in the order of `settings`.
-pub fn lives_under(
+pub fn lives_under<S: Into<Setting> + Copy + Sync>(
     seeds: &[u64],
-    settings: &[Recall],
+    settings: &[S],
 ) -> Result<Vec<(u64, Vec<Life>)>, LivesError> {
     let workers = thread::available_parallelism().map_or(1, |n| n.get());
     let chunk = seeds.len().div_ceil(workers).max(1);
@@ -273,3 +320,30 @@ impl std::fmt::Display for LivesError {
 }
 
 impl std::error::Error for LivesError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn raised_sleeps_sorts_upbringing_worlds_by_kind() {
+        let stays = |s: [u32; RAISED]| {
+            s.map(|sleeps| Stay {
+                sleeps,
+                ..Stay::default()
+            })
+        };
+        let life = Life {
+            raised: Stay::default(),
+            bush: Stay::default(),
+            barren: Stay::default(),
+            home: (0, 0),
+            // Bush first: bush, barren, bush, barren.
+            bush_raised: stays([1, 10, 1, 10]),
+            // Barren first: barren, bush, barren, bush.
+            barren_raised: stays([100, 2, 100, 2]),
+        };
+        assert_eq!(life.raised_sleeps(true), 220);
+        assert_eq!(life.raised_sleeps(false), 6);
+    }
+}

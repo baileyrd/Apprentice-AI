@@ -1,0 +1,36 @@
+1. barren test sleeps, S vs A -24% [-28%, -20%]: unclear
+2. barren upbringing sleeps, S vs A -36% [-39%, -34%]: met
+3. S vs A, each at most +10%:
+   bush_sleeps -35% [-40%, -30%]: met
+   raised_bush_sleeps -30% [-34%, -27%]: met
+   barren_hopes +42% [+22%, +65%]: missed
+   home_wrong_100 -2% [-7%, +4%]: met
+4. S barren test vs first barren world, per 1,000 steps +87% [+71%, +105%]: missed
+   (A, not judged) A barren test vs first barren world, per 1,000 steps +33% [+30%, +36%]: missed
+Means (A, S):
+   barren_sleeps: 56.3, 46.5
+   raised_barren_sleeps: 95.9, 62.8
+   bush_sleeps: 14.2, 9.4
+   raised_bush_sleeps: 32.7, 23.2
+   barren_hopes: 1.7, 3.3
+   home_wrong_100: 0.6, 0.5
+   home_wrong_300: 0.5, 0.5
+   bush_meals: 278.7, 290.6
+   barren_meals: 32.5, 64.1
+   barren_futile: 13.1, 5.2
+   barren_first_w1_sleeps: 21.1, 12.9
+   barren_first_w2_sleeps: 7.9, 6.5
+   barren_first_w3_sleeps: 25.8, 16.4
+   barren_first_w4_sleeps: 8.8, 6.4
+   barren_first_w1_meals: 27.8, 48.8
+   barren_first_w2_meals: 61.4, 64.2
+   barren_first_w3_meals: 22.9, 44.9
+   barren_first_w4_meals: 59.7, 65.4
+   bush_first_w1_sleeps: 7.7, 4.4
+   bush_first_w2_sleeps: 22.9, 15.7
+   bush_first_w3_sleeps: 8.3, 6.0
+   bush_first_w4_sleeps: 26.0, 17.7
+   bush_first_w1_meals: 59.6, 67.5
+   bush_first_w2_meals: 26.5, 45.2
+   bush_first_w3_meals: 60.4, 65.3
+   bush_first_w4_meals: 22.6, 43.0

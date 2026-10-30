@@ -38,6 +38,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
         rate: 0.2,
         seed: 0,
         rare: None,
+        unseen: false,
     };
     let mut out = PathBuf::from("runs/patterns-net");
     let mut it = args.iter();
