@@ -367,3 +367,198 @@ integration of steps, like the ring for turns). That would make walking
 a two-way combination again, and probably pass, but it would also mean
 giving the apprentice, built in, every fact it fails to keep. Whether to
 do that or to look for a learner that keeps state is Nano's call.
+
+## A learner that keeps state, step 1: GRU ceiling check (rules fixed before any run)
+
+Nano's direction (2026-10-30): no innate place sense; find a learner that
+keeps state. First, a ceiling check: can any recurrent network, trained
+the usual way, do walking? If not, stop and report.
+
+- **Learner.** A small GRU, 32 hidden units, written here (no ML library),
+  comparison only like `Learning::Backprop`. Input: the percept (8 sensed
+  numbers + the 4 ring units) and the motor one-hot (4). Output: the next
+  percept, read out linearly from the new hidden state. Trained **offline
+  with backprop through time**: the 40,000-step walking life is recorded,
+  then replayed in order for 20 epochs, in chunks of 40 steps (hidden
+  state carried across chunks, gradients cut at chunk edges), Adam at rate
+  0.003, gradients clipped to norm 1. Squared error on the next percept.
+- **World and life.** Walking + ring, as judged above. After training, the
+  same world goes on for 4,000 more steps with the GRU frozen, and that is
+  what is scored.
+- **Scoring.** As before, on non-stare steps of the 4,000: one-ahead and
+  two-ahead over the last 100, after stares ≥ 5 over all of them. Two-ahead
+  feeds its own predicted percept (ring included) back in.
+- **Place probe.** A linear probe for where it stands (centre or which side
+  box), trained by delta rule on the hidden states of one frozen replay of
+  the training life, then scored on the last 100 scored steps.
+- **Marks** (same as walking): one-ahead ≥ 95%, two-ahead ≥ 90%, after
+  stares ≥ 5 ≥ 90%, in ≥ 19 of seeds 101–120.
+- **Tuning**: if needed, only on seeds 201–205, disclosed. A gradient check
+  against finite differences is a test.
+- **Stop rule (Nano's):** if it misses, stop and report. Only if it passes
+  comes step 2: a recurrent net with e-prop-style eligibility traces, online
+  and local, with its own rules committed first and fresh seeds.
+
+### Step 1 results: met
+
+**Walking + ring, GRU trained offline by BPTT, seeds 101–120: met, 20/20.**
+
+| Learner | One-ahead | Two-ahead | After stares ≥ 5 | Place probe | Centre-direction probe | Seeds passing |
+|---------|-----------|-----------|------------------|-------------|------------------------|---------------|
+| GRU     | 1.00      | 1.00      | 1.00             | 0.39        | 0.90                   | 20/20         |
+
+So a network that keeps state can learn walking from this data; the task
+is not too hard, and the local learners' miss is about how they learn.
+
+The place probe (which side box, in compass terms) reads only 0.39, though
+the GRU predicts perfectly. A second probe, added after seeing that and
+reported for every learner from now on, asks where the centre lies *from
+where it faces* (ahead, right, behind, left, or it is in the centre): 0.90.
+The GRU keeps place egocentrically, relative to its heading, not on the
+compass. For the local learners on seeds 81–100 that probe reads 0.37–0.49
+(no memory 0.39), so they keep neither.
+
+## Step 2: e-prop, online and local (rules fixed before any run)
+
+- **Learner.** A recurrent network of 64 leaky tanh units, no self
+  connections: `h(t) = α·h(t−1) + (1−α)·tanh(Win·x(t) + Wrec·h(t−1) + b)`,
+  with each unit's leak α fixed and spread evenly over 0.5–0.95 (fast to
+  slow memory). Output `y = Wout·h(t) + bout`, the next percept. Input:
+  percept (8 + ring 4) and motor (4), as for the GRU.
+- **Learning: e-prop** (Bellec et al., 2020), online, every step, no
+  replay. Each input and recurrent weight keeps an eligibility trace,
+  `ε_ij(t) = α_j·ε_ij(t−1) + (1−α_j)·tanh′(a_j(t))·z_i(t)`, where `z_i` is
+  its presynaptic activity (input, or the unit's activity at `t−1`). A
+  learning signal `L_j(t) = Σ_k Wout_kj·(y_k − y*_k)` is broadcast to each
+  unit (symmetric feedback), and each weight moves by `−η·L_j(t)·ε_ij(t)`.
+  `Wout` learns by the delta rule. Every update uses only that synapse's
+  own trace and its unit's learning signal: local in space and time.
+- **World and scoring.** Walking + ring, scored like the other online
+  learners: last 100 scored steps of the life, after stares ≥ 5 over the
+  second half, both probes frozen for the second half.
+- **Budget: 400,000 steps**, one online pass. The GRU saw 40,000 steps 20
+  times (800,000 step-updates); an online learner can't replay, so it
+  gets a longer life instead, half the GRU's updates.
+- **Marks** (same): one-ahead ≥ 95%, two-ahead ≥ 90%, after stares ≥ 5
+  ≥ 90%, in ≥ 19 of 20 fresh seeds, **121–140**. Tuning (rate, hidden
+  size, leak range) only on seeds 201–210, disclosed.
+
+### Step 2 results: missed
+
+Tuning on seeds 201–210 (400,000 steps each), disclosed:
+
+| Setting (units, leaks, rate) | One-ahead |
+|------------------------------|-----------|
+| 64, 0.5–0.95, 0.003          | 0.83      |
+| 64, 0.5–0.95, **0.01**       | 0.85      |
+| 64, 0.5–0.95, 0.03           | 0.76      |
+| 64, 0.0–0.9, 0.01            | 0.86      |
+| 64, 0.8–0.99, 0.01           | 0.79      |
+| 128, 0.5–0.95, 0.01          | 0.86      |
+
+The committed shape (64 units, leaks 0.5–0.95) was kept, with rate 0.01.
+Every setting plateaued around 0.85; at 40,000 steps it was 0.74.
+
+**Walking + ring, e-prop online, seeds 121–140: missed, 0/20.**
+
+| Learner | One-ahead | Two-ahead | After stares ≥ 5 | Place probe | Centre-direction probe | Seeds passing |
+|---------|-----------|-----------|------------------|-------------|------------------------|---------------|
+| E-prop  | 0.85      | 0.84      | 0.84             | 0.43        | 0.49                   | 0/20          |
+| GRU (step 1, for comparison) | 1.00 | 1.00 | 1.00   | 0.39        | 0.90                   | 20/20         |
+| Gated (seeds 81–100)         | 0.86 | 0.85 | 0.86   | 0.26        | 0.37                   | 0/20          |
+
+- **Between the two.** E-prop beats the earlier local learners' 0.77–0.79
+  and matches gated's 0.86, but stays far from the GRU's 1.00.
+- **It doesn't keep place.** Its centre-direction probe reads 0.49, against
+  0.90 for the GRU and 0.39 with no memory. Some trace, not a state it can
+  use.
+- **Likely why, not checked:** e-prop keeps only each weight's own
+  trace, and drops how a weight's change reaches the output through
+  *other* units over later steps. The GRU's solution looks like it needs
+  exactly that: hold "the centre is behind me" and rotate it with each
+  turn, a state carried and rewritten across units over many steps.
+  Leaky additive units also have no gate for "rewrite on a step forward,
+  hold otherwise".
+
+## Where this leaves it
+
+- Turning and matching with the ring are solved by every learner; walking
+  needs state, and only BPTT (offline, non-local) found it here.
+- Online local learning (context units, gating, e-prop) reaches about 0.86
+  and stops there.
+- The GRU's own answer is the useful clue: it keeps where it is
+  *relative to its heading*, not on the compass.
+
+## Last local attempt: e-prop with motor-gated recurrent weights (rules fixed before any run)
+
+Nano's last try on walking before the facing track stops (2026-10-30).
+
+- **Learner.** The step-2 e-prop network, but each motor has its own set
+  of recurrent weights, and the motor fired picks which set carries
+  `h(t−1)` into this step:
+  `h(t) = α·h(t−1) + (1−α)·tanh(Win·x(t) + Wrec[m(t)]·h(t−1) + b)`.
+  Input weights stay shared (the motor's one-hot is still in `x`). No self
+  connections in any set. Why it might help: the GRU's answer was to keep
+  "where the centre lies from my heading" and rotate it on each turn; a
+  per-motor recurrent map can do that rotation directly (a turn-left map,
+  a turn-right map, a hold map for stares, a step map for forward).
+- **Learning.** E-prop as in step 2: each recurrent weight's trace only
+  takes in activity on steps when its motor fired, and otherwise just
+  decays. Same broadcast learning signal through `Woutᵀ`. Online, local.
+- **Same everything else:** 64 units, leaks spread over 0.5–0.95,
+  400,000 steps, walking + ring, scored as before; probes for compass
+  place and for centre direction (the egocentric place probe), frozen for
+  the second half.
+- **Marks** (same): one-ahead ≥ 95%, two-ahead ≥ 90%, after stares ≥ 5
+  ≥ 90%, in ≥ 19 of fresh seeds **141–160**. Tuning (rate only) on seeds
+  201–210, disclosed.
+- **Stop rule (Nano's):** if it misses, the facing track stops, and this
+  doc gets its final summary.
+
+### Results: missed
+
+Tuning on seeds 201–210 (rate only): 0.003 → 0.86, **0.01 → 0.87**,
+0.03 → 0.85 one-ahead (ungated e-prop at 0.01: 0.85).
+
+**Walking + ring, gated e-prop online, seeds 141–160: missed, 0/20.**
+
+| Learner | One-ahead | Two-ahead | After stares ≥ 5 | Place probe | Centre-direction probe | Seeds passing |
+|---------|-----------|-----------|------------------|-------------|------------------------|---------------|
+| Gated e-prop | 0.86 | 0.84 | 0.86 | 0.32 | 0.48 | 0/20 |
+
+Per-motor recurrent weights changed nothing measurable: same one-ahead as
+plain e-prop (0.85) and gated context units (0.86), and the centre-direction
+probe stays near 0.48 (GRU 0.90, no memory 0.39).
+
+## The facing track stops here (Nano's stop rule, 2026-10-30)
+
+| Stage | What it asks | Who passes |
+|-------|--------------|------------|
+| Turning | what each unlabelled motor does | every learner, no memory included |
+| Matching | heading, when two boxes look alike | no local learner; every learner once given an innate heading ring |
+| Walking (+ ring) | where it stands, kept across steps | only a GRU trained offline by BPTT (1.00); every online, local learner stops at 0.77–0.87 |
+
+What it showed:
+
+1. **Raw senses and unlabelled motors are not the hard part.** Motor
+   effects are learned from noisy, unlabelled input in a few thousand
+   steps.
+2. **Keeping a fact the percept doesn't carry is.** Each time the world
+   needed one (heading, then place), every local learner stopped at about
+   the same level, whatever memory it had: context units, recent history,
+   motor gating, e-prop, gated e-prop.
+3. **It is learnable.** A GRU with BPTT solves walking on every seed, and
+   it keeps place *egocentrically* ("where the centre lies from my
+   heading"), not on the compass.
+4. **What local learning missed here** is credit that flows through other
+   units over later steps, which is exactly what keeping and rotating that
+   egocentric place needs. Probe accuracy stays near 0.48 for every local
+   learner.
+5. **Method lessons:** probes must be frozen while scored (an online probe
+   leaks memory through its own weights); random looks need a minimum
+   distance; mark and seed discipline caught a world flaw and a false
+   "trace of heading" claim.
+
+Open, not built: an innate place sense (path integration of steps, like
+the ring), or a learning rule that carries credit across units over time
+while staying local.

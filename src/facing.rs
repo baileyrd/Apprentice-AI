@@ -11,6 +11,8 @@
 //!
 //! Separate from the grid world: nothing here touches the main apprentice.
 
+use crate::eprop::Eprop;
+use crate::gru::{Gru, Sample, Training};
 use crate::network::{Learning, Net, NetError};
 use crate::rng::Rng;
 
@@ -405,15 +407,16 @@ impl Learner {
 /// learner never sees it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Probe {
-    /// One row per class: weights, then bias.
-    rows: Vec<[f64; HIDDEN + 1]>,
+    /// One row per class: a weight per hidden unit, then bias.
+    rows: Vec<Vec<f64>>,
     rate: f64,
 }
 
 impl Probe {
-    pub fn new(classes: usize, rate: f64) -> Self {
+    /// A probe for `classes` classes, reading `width` hidden units.
+    pub fn new(classes: usize, width: usize, rate: f64) -> Self {
         Self {
-            rows: vec![[0.0; HIDDEN + 1]; classes],
+            rows: vec![vec![0.0; width + 1]; classes],
             rate,
         }
     }
@@ -431,17 +434,21 @@ impl Probe {
         let scores = self.scores(hidden);
         for (c, row) in self.rows.iter_mut().enumerate() {
             let e = if c == class { 1.0 } else { 0.0 } - scores[c];
+            let width = row.len() - 1;
             for (w, a) in row.iter_mut().zip(hidden) {
                 *w += self.rate * e * a;
             }
-            row[HIDDEN] += self.rate * e;
+            row[width] += self.rate * e;
         }
     }
 
     fn scores(&self, hidden: &[f64]) -> Vec<f64> {
         self.rows
             .iter()
-            .map(|row| row[HIDDEN] + row.iter().zip(hidden).map(|(w, a)| w * a).sum::<f64>())
+            .map(|row| {
+                let (weights, bias) = row.split_at(row.len() - 1);
+                bias[0] + weights.iter().zip(hidden).map(|(w, a)| w * a).sum::<f64>()
+            })
             .collect()
     }
 }
@@ -450,6 +457,15 @@ impl Probe {
 /// centre.
 fn place(at: Option<usize>) -> usize {
     at.unwrap_or(SIDES)
+}
+
+/// Which way the centre lies from where it faces, in turns to the right,
+/// as a probe class; [`SIDES`] when it stands in the centre. Where it
+/// stands, seen from its own heading.
+fn centre_direction(world: &World) -> usize {
+    world.at().map_or(SIDES, |side| {
+        (opposite(side) + SIDES - world.heading()) % SIDES
+    })
 }
 
 /// Accuracies at the end of a life. Each is `None` when nothing counted.
@@ -475,6 +491,9 @@ pub struct Score {
     /// Where it stands (centre or which side box), read off the hidden
     /// layer by a frozen probe, on the last `window` scored steps.
     pub probe_place: Option<f64>,
+    /// Which way the centre lies from where it faces (ahead, right,
+    /// behind, left, or it is in the centre), by a frozen probe likewise.
+    pub probe_centre: Option<f64>,
 }
 
 /// A stare this long or longer counts as long.
@@ -495,18 +514,143 @@ pub struct Life {
 
 /// Lives `life` on `seed` and scores it.
 pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
-    let mut world = World::new(life.stage, seed);
+    let world = World::new(life.stage, seed);
     let percept = FEATURES + if life.ring { SIDES } else { 0 };
-    let mut learner = Learner::new(
+    let learner = Learner::new(
         life.memory,
         percept,
         world.motors(),
         life.rate,
         seed ^ 0x5eed,
     )?;
+    Ok(score(world, learner, life, seed))
+}
+
+/// Anything that learns online to predict the next percept, with a hidden
+/// layer to probe.
+trait Predictor {
+    /// Hidden units the probes read.
+    fn width(&self) -> usize;
+    /// Its hidden activity on this step, and its predictions one and two
+    /// steps on (the second given motor `after`). Changes nothing.
+    fn foresee(&self, percept: &[f64], motor: usize, after: usize) -> [Vec<f64>; 3];
+    /// Learns that `percept` and `motor` led to `next`, and moves on.
+    fn learn(&mut self, percept: &[f64], motor: usize, next: &[f64]);
+}
+
+impl Predictor for Learner {
+    fn width(&self) -> usize {
+        HIDDEN
+    }
+
+    fn foresee(&self, percept: &[f64], motor: usize, after: usize) -> [Vec<f64>; 3] {
+        let [one, two] = self.imagine(percept, motor, after);
+        [self.hidden(percept, motor), one, two]
+    }
+
+    fn learn(&mut self, percept: &[f64], motor: usize, next: &[f64]) {
+        Learner::learn(self, percept, motor, next);
+    }
+}
+
+/// An e-prop network on the facing body: input is the percept and the
+/// motor's one-hot.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EpropLearner {
+    net: Eprop,
+    motors: usize,
+    /// Whether the motor picks the recurrent weights.
+    gated: bool,
+}
+
+impl EpropLearner {
+    pub fn new(net: Eprop, motors: usize, gated: bool) -> Self {
+        Self { net, motors, gated }
+    }
+
+    fn gate(&self, motor: usize) -> usize {
+        if self.gated { motor } else { 0 }
+    }
+
+    fn input(&self, percept: &[f64], motor: usize) -> Vec<f64> {
+        let mut x = percept.to_vec();
+        x.extend(one_hot(motor, self.motors));
+        x
+    }
+}
+
+impl Predictor for EpropLearner {
+    fn width(&self) -> usize {
+        self.net.units()
+    }
+
+    fn foresee(&self, percept: &[f64], motor: usize, after: usize) -> [Vec<f64>; 3] {
+        let gate = self.gate(motor);
+        let (h1, one) = self
+            .net
+            .peek(self.net.state(), &self.input(percept, motor), gate);
+        let two = self
+            .net
+            .peek(&h1, &self.input(&one, after), self.gate(after))
+            .1;
+        [h1, one, two]
+    }
+
+    fn learn(&mut self, percept: &[f64], motor: usize, next: &[f64]) {
+        let gate = self.gate(motor);
+        self.net.advance(&self.input(percept, motor), gate, next);
+    }
+}
+
+/// E-prop's settings (see `docs/facing/README.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EpropLife {
+    pub stage: Stage,
+    pub steps: usize,
+    pub units: usize,
+    pub leaks: (f64, f64),
+    pub rate: f64,
+    pub window: usize,
+    /// One set of recurrent weights per motor, picked by the motor fired.
+    pub gated: bool,
+}
+
+/// Lives `life` on `seed` with an e-prop network (always with the ring)
+/// and scores it like [`live`].
+pub fn live_eprop(life: &EpropLife, seed: u64) -> Score {
+    let world = World::new(life.stage, seed);
+    let percept = FEATURES + SIDES;
+    let gates = if life.gated { world.motors() } else { 1 };
+    let net = Eprop::new(
+        percept + world.motors(),
+        life.units,
+        percept,
+        gates,
+        life.leaks,
+        life.rate,
+        seed ^ 0x5eed,
+    );
+    let learner = EpropLearner::new(net, world.motors(), life.gated);
+    let as_life = Life {
+        stage: life.stage,
+        memory: Memory::None,
+        ring: true,
+        steps: life.steps,
+        rate: life.rate,
+        window: life.window,
+    };
+    score(world, learner, &as_life, seed)
+}
+
+/// Lives with random motors, `learner` predicting and learning online, and
+/// scores it. Only `life`'s stage, ring, steps and window are read.
+fn score<P: Predictor>(mut world: World, mut learner: P, life: &Life, seed: u64) -> Score {
+    let width = learner.width();
     let mut driver = Driver::new(&world, seed ^ 0xd21e);
-    let (mut probe, mut place_probe) = (Probe::new(SIDES, 0.02), Probe::new(SIDES + 1, 0.02));
-    let mut places = vec![];
+    let mut probe = Probe::new(SIDES, width, 0.02);
+    let mut place_probe = Probe::new(SIDES + 1, width, 0.02);
+    let mut centre_probe = Probe::new(SIDES + 1, width, 0.02);
+    let (mut places, mut centres) = (vec![], vec![]);
     let (mut ones, mut twos, mut probes, mut long) = (vec![], vec![], vec![], vec![]);
     let (mut probes_matching, mut headings_matching) = (vec![], vec![]);
     let mut sense = world.percept(life.ring);
@@ -515,11 +659,11 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
     for t in 0..life.steps {
         let after = driver.drive();
         let (motor, stared) = now;
-        let [one, two] = learner.imagine(&sense, motor, after.0);
-        let hidden = learner.hidden(&sense, motor);
+        let [hidden, one, two] = learner.foresee(&sense, motor, after.0);
         let heading = world.heading();
         let matching = world.faces_matching();
         let stands = place(world.at());
+        let centre = centre_direction(&world);
         world.fire(motor);
         let next = world.percept(life.ring);
         let truth = world.faced();
@@ -530,6 +674,7 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
             let read = probe.read(&hidden) == heading;
             probes.push(read);
             places.push(place_probe.read(&hidden) == stands);
+            centres.push(centre_probe.read(&hidden) == centre);
             if matching {
                 probes_matching.push(read);
                 headings_matching.push(heading);
@@ -547,12 +692,13 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
         if t < life.steps / 2 {
             probe.learn(&hidden, heading);
             place_probe.learn(&hidden, stands);
+            centre_probe.learn(&hidden, centre);
         }
         learner.learn(&sense, motor, &next);
         sense = next;
         now = after;
     }
-    Ok(Score {
+    Score {
         one: tail_rate(&ones, life.window),
         two: tail_rate(&twos, life.window),
         after_stare: tail_rate(&long, long.len()),
@@ -560,7 +706,8 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
         probe_matching: tail_rate(&probes_matching, life.window),
         majority_matching: majority(&headings_matching, life.window),
         probe_place: tail_rate(&places, life.window),
-    })
+        probe_centre: tail_rate(&centres, life.window),
+    }
 }
 
 /// Share of the most common value among the last `window` entries.
@@ -570,6 +717,104 @@ fn majority(values: &[usize], window: usize) -> Option<f64> {
         .map(|v| tail.iter().filter(|&&x| x == v).count())
         .max()?;
     (!tail.is_empty()).then(|| most as f64 / tail.len() as f64)
+}
+
+/// The GRU ceiling check's settings (see `docs/facing/README.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Ceiling {
+    pub stage: Stage,
+    /// Steps of the recorded life it trains on.
+    pub steps: usize,
+    /// Steps after training, frozen, that are scored.
+    pub eval: usize,
+    pub hidden: usize,
+    pub training: Training,
+    /// Scored steps at the end over which accuracy is scored.
+    pub window: usize,
+}
+
+/// Records a life with the ring, trains a GRU on it offline by BPTT, then
+/// scores it frozen on the steps that follow. Only `one`, `two`,
+/// `after_stare` and `probe_place` are filled.
+pub fn ceiling(c: &Ceiling, seed: u64) -> Score {
+    let mut world = World::new(c.stage, seed);
+    let n = world.motors();
+    let mut driver = Driver::new(&world, seed ^ 0xd21e);
+    let input = |p: &[f64], m: usize| -> Vec<f64> {
+        let mut x = p.to_vec();
+        x.extend(one_hot(m, n));
+        x
+    };
+    let mut life = Vec::with_capacity(c.steps);
+    let mut places = Vec::with_capacity(c.steps);
+    let mut centres = Vec::with_capacity(c.steps);
+    let mut percept = world.percept(true);
+    for _ in 0..c.steps {
+        let (motor, _) = driver.drive();
+        places.push(place(world.at()));
+        centres.push(centre_direction(&world));
+        world.fire(motor);
+        let next = world.percept(true);
+        life.push(Sample {
+            input: input(&percept, motor),
+            target: next.clone(),
+        });
+        percept = next;
+    }
+    let mut gru = Gru::new(percept.len() + n, c.hidden, percept.len(), seed ^ 0x5eed);
+    gru.train(&life, &c.training);
+
+    let mut place_probe = Probe::new(SIDES + 1, c.hidden, 0.02);
+    let mut centre_probe = Probe::new(SIDES + 1, c.hidden, 0.02);
+    let mut h = gru.rest();
+    for ((sample, &at), &centre) in life.iter().zip(&places).zip(&centres) {
+        h = gru.step(&h, &sample.input).0;
+        place_probe.learn(&h, at);
+        centre_probe.learn(&h, centre);
+    }
+
+    let (mut ones, mut twos, mut long, mut placed) = (vec![], vec![], vec![], vec![]);
+    let mut centred = vec![];
+    let mut now = driver.drive();
+    let mut two_ahead: Option<usize> = None;
+    for _ in 0..c.eval {
+        let after = driver.drive();
+        let (motor, stared) = now;
+        let (h1, one) = gru.step(&h, &input(&percept, motor));
+        let two = gru.step(&h1, &input(&one, after.0)).1;
+        let stands = place(world.at());
+        let centre = centre_direction(&world);
+        world.fire(motor);
+        let next = world.percept(true);
+        let truth = world.faced();
+        let looks = world.looks();
+        if let Some(stared) = stared {
+            let hit = nearest(looks, &one) == truth;
+            ones.push(hit);
+            placed.push(place_probe.read(&h1) == stands);
+            centred.push(centre_probe.read(&h1) == centre);
+            if stared >= LONG_STARE {
+                long.push(hit);
+            }
+            if let Some(guess) = two_ahead {
+                twos.push(guess == truth);
+            }
+        }
+        two_ahead = after.1.map(|_| nearest(looks, &two));
+        h = h1;
+        percept = next;
+        now = after;
+    }
+    Score {
+        one: tail_rate(&ones, c.window),
+        two: tail_rate(&twos, c.window),
+        after_stare: tail_rate(&long, long.len()),
+        probe: None,
+        probe_matching: None,
+        majority_matching: None,
+        probe_place: tail_rate(&placed, c.window),
+        probe_centre: tail_rate(&centred, c.window),
+    }
 }
 
 /// Look id whose pattern is closest to `v`.
@@ -805,7 +1050,7 @@ mod tests {
 
     #[test]
     fn probe_learns_a_separable_heading() {
-        let mut p = Probe::new(SIDES, 0.05);
+        let mut p = Probe::new(SIDES, HIDDEN, 0.05);
         let code = |h: usize| -> Vec<f64> { (0..HIDDEN).map(|i| f64::from(i % 4 == h)).collect() };
         for t in 0..400 {
             p.learn(&code(t % 4), t % 4);
