@@ -65,6 +65,7 @@ fn since(before: Traffic, after: Traffic) -> Traffic {
         unexpected: after.unexpected - before.unexpected,
         unexpected_written: after.unexpected_written - before.unexpected_written,
         replayed: after.replayed - before.replayed,
+        taught: after.taught - before.taught,
     }
 }
 
@@ -154,6 +155,7 @@ fn add(a: Traffic, b: Traffic) -> Traffic {
         unexpected: a.unexpected + b.unexpected,
         unexpected_written: a.unexpected_written + b.unexpected_written,
         replayed: a.replayed + b.replayed,
+        taught: a.taught + b.taught,
     }
 }
 
