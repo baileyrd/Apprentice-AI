@@ -89,38 +89,42 @@ clusters of bushes not yet regrown; rule 4 unclear.
 
 ## A second false-hope mark (Nano, 2026-10-30, fixed before the verdict)
 
-Added while the 200-seed run was going, before its verdict was read. It
-is a second judgement, not a rewrite: rule 3's 10% mark on barren false
-hopes is still reported as it stands. The other rule 3 marks and rule 4
-are unchanged.
+Added while the 200-seed run was going, before its verdict was read, and
+amended once (still before the verdict) to measure steps in each arm
+instead of fixed costs. It is a second judgement, not a rewrite: rule 3's
+10% mark on barren false hopes is still reported as it stands. The other
+rule 3 marks and rule 4 are unchanged.
 
 **3b′. False hopes cost less than half of what the fix saves.** In the
-barren test world, per 1,000 steps, paired by seed:
+barren test world of the barren-first life, per 1,000 steps, paired by
+seed:
 
-    (extra false hopes) × W  ≤  0.5 × (sleeps saved) × S
+    (S's wasted steps − A's wasted steps) − ½ × (A's steps lost to sleeps − S's)  ≤  0
 
-judged on the mean of each seed's left side less right side, met only if
-the 90% interval's upper end is at most 0 (missed if its lower end is
-above 0). False hopes are counted over the world's first 1,000 steps;
-sleeps over all 2,000, halved.
+judged on the mean over seeds, met only if the 90% interval's upper end is
+at most 0 (missed if its lower end is above 0).
 
-Costs, measured once on today's default apprentice (the A arm) in the
-barren test world of seeds 101–110 (`cargo run --release --example
-hope_costs`), and not to be adjusted afterwards:
+- **Steps wasted on false hopes**: steps taken toward the hoped-for square
+  that a straight route to the next real goal would not have taken. A
+  false hope is an eaten square in view, empty, given more than even odds
+  of food, in the world's first 1,000 steps. The steps closing on it are
+  the run just before the sighting, and just after it, in which the walk
+  (around walls) to that square shrinks every step. Each such step is
+  wasted unless it also shrinks the walk to the next square the apprentice
+  eats from; with no later meal, all are wasted. Noticed in passing on the
+  way to a meal counts 0. Each step counts once per square.
+- **Steps lost to sleeps**: a sleep takes no steps in this world; it wakes
+  on the start square, so each sleep loses the walk from there back to
+  where it fell asleep. Counted over all 2,000 steps, halved.
 
-- **W = 0.50 steps per false hope**: steps spent closing on the square,
-  in the run just before the sighting in which its distance fell every
-  step, plus steps after while it still fell. Only 6 false hopes in those
-  10 lives, so W rests on little: most false hopes are noticed in passing.
-- **S = 3.69 steps per sleep**: a sleep takes no steps in this world; it
-  wakes on the start square, so S is the shortest walk around walls from
-  there back to where it fell asleep (562 sleeps).
-
-`cargo run --release --bin hope_mark -- runs/sweep/sweep.csv` prints the
-verdict from the judging run's CSV.
+`cargo run --release --bin hope_steps -- --judge` lives the barren-first
+life of each judging seed under A and S step by step, prints the verdict
+and each arm's W (wasted steps per false hope) and S (steps lost per
+sleep), and writes `hope_steps.csv`.
 
 One candidate only: the combined fix (S). Time-unseen alone is not judged
-on these seeds.
+on these seeds. Bush false hopes are reported, not judged, from the next
+run of `sweep` on (not in this one).
 
 ## Tuning (seeds 101–110)
 

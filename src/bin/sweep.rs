@@ -60,7 +60,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
 }
 
 /// Per-seed measures, in CSV column order.
-const MEASURES: [Measure; 26] = [
+const MEASURES: [Measure; 27] = [
     ("barren_sleeps", |l| f64::from(l.barren.sleeps)),
     ("raised_barren_sleeps", |l| f64::from(l.raised_sleeps(true))),
     ("bush_sleeps", |l| f64::from(l.bush.sleeps)),
@@ -111,6 +111,7 @@ const MEASURES: [Measure; 26] = [
     ("bush_first_w2_meals", |l| f64::from(l.bush_raised[1].meals)),
     ("bush_first_w3_meals", |l| f64::from(l.bush_raised[2].meals)),
     ("bush_first_w4_meals", |l| f64::from(l.bush_raised[3].meals)),
+    ("bush_hopes", |l| f64::from(l.bush.hopes)),
 ];
 
 /// One seed and its life under each setting.
