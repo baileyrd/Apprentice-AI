@@ -11,7 +11,7 @@ use apprentice::facing::{
 use apprentice::gru::Training;
 
 const USAGE: &str = "\
-usage: facing [--stage turning|matching|walking] [--ring] [--gru] [--eprop]
+usage: facing [--stage turning|matching|walking] [--ring] [--gru] [--eprop [--gated]]
               [--seeds N]
               [--from SEED] [--judge] [--steps S] [--rate R]
 
@@ -21,7 +21,7 @@ seeds 1-20. Runs every memory on the stage (default turning) for S steps
 each memory's scores and verdict. With --ring every learner also gets the
 innate heading ring. With --gru, runs the GRU ceiling check instead (always
 with the ring); with --eprop, the online e-prop network (always with the
-ring, rate R).";
+ring, rate R; --gated gives each motor its own recurrent weights).";
 
 /// Turns at the end over which accuracy is scored.
 const WINDOW: usize = 100;
@@ -44,6 +44,7 @@ struct Args {
     ring: bool,
     gru: bool,
     eprop: bool,
+    gated: bool,
 }
 
 fn budget(stage: Stage) -> usize {
@@ -63,6 +64,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
         ring: false,
         gru: false,
         eprop: false,
+        gated: false,
     };
     let (mut n, mut from) = (10, 101);
     let mut it = args.iter();
@@ -77,6 +79,10 @@ fn parse(args: &[String]) -> Result<Args, String> {
         }
         if flag == "--eprop" {
             a.eprop = true;
+            continue;
+        }
+        if flag == "--gated" {
+            a.gated = true;
             continue;
         }
         if flag == "--judge" {
@@ -224,9 +230,11 @@ fn execute_eprop(a: &Args) -> Result<(), String> {
         leaks: (0.5, 0.95),
         rate: a.rate,
         window: WINDOW,
+        gated: a.gated,
     };
     println!(
-        "e-prop, stage {:?}, {} steps, rate {}, seeds {:?}..={:?}",
+        "e-prop (gated {}), stage {:?}, {} steps, rate {}, seeds {:?}..={:?}",
+        life.gated,
         life.stage,
         life.steps,
         life.rate,

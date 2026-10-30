@@ -559,11 +559,17 @@ impl Predictor for Learner {
 pub struct EpropLearner {
     net: Eprop,
     motors: usize,
+    /// Whether the motor picks the recurrent weights.
+    gated: bool,
 }
 
 impl EpropLearner {
-    pub fn new(net: Eprop, motors: usize) -> Self {
-        Self { net, motors }
+    pub fn new(net: Eprop, motors: usize, gated: bool) -> Self {
+        Self { net, motors, gated }
+    }
+
+    fn gate(&self, motor: usize) -> usize {
+        if self.gated { motor } else { 0 }
     }
 
     fn input(&self, percept: &[f64], motor: usize) -> Vec<f64> {
@@ -579,13 +585,20 @@ impl Predictor for EpropLearner {
     }
 
     fn foresee(&self, percept: &[f64], motor: usize, after: usize) -> [Vec<f64>; 3] {
-        let (h1, one) = self.net.peek(self.net.state(), &self.input(percept, motor));
-        let two = self.net.peek(&h1, &self.input(&one, after)).1;
+        let gate = self.gate(motor);
+        let (h1, one) = self
+            .net
+            .peek(self.net.state(), &self.input(percept, motor), gate);
+        let two = self
+            .net
+            .peek(&h1, &self.input(&one, after), self.gate(after))
+            .1;
         [h1, one, two]
     }
 
     fn learn(&mut self, percept: &[f64], motor: usize, next: &[f64]) {
-        self.net.advance(&self.input(percept, motor), next);
+        let gate = self.gate(motor);
+        self.net.advance(&self.input(percept, motor), gate, next);
     }
 }
 
@@ -598,6 +611,8 @@ pub struct EpropLife {
     pub leaks: (f64, f64),
     pub rate: f64,
     pub window: usize,
+    /// One set of recurrent weights per motor, picked by the motor fired.
+    pub gated: bool,
 }
 
 /// Lives `life` on `seed` with an e-prop network (always with the ring)
@@ -605,15 +620,17 @@ pub struct EpropLife {
 pub fn live_eprop(life: &EpropLife, seed: u64) -> Score {
     let world = World::new(life.stage, seed);
     let percept = FEATURES + SIDES;
+    let gates = if life.gated { world.motors() } else { 1 };
     let net = Eprop::new(
         percept + world.motors(),
         life.units,
         percept,
+        gates,
         life.leaks,
         life.rate,
         seed ^ 0x5eed,
     );
-    let learner = EpropLearner::new(net, world.motors());
+    let learner = EpropLearner::new(net, world.motors(), life.gated);
     let as_life = Life {
         stage: life.stage,
         memory: Memory::None,
