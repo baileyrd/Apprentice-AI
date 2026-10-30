@@ -119,7 +119,7 @@ fn run(life: Life, seeds: &[u64]) -> Result<Vec<Score>, String> {
         .collect()
 }
 
-fn report(stage: Stage, memory: Memory, scores: &[Score]) -> usize {
+fn report(stage: Stage, memory: Memory, seeds: &[u64], scores: &[Score]) -> usize {
     let col = |f: fn(&Score) -> Option<f64>| median(scores.iter().filter_map(f).collect());
     let passed = scores.iter().filter(|s| passes(stage, s)).count();
     println!(
@@ -131,6 +131,11 @@ fn report(stage: Stage, memory: Memory, scores: &[Score]) -> usize {
         col(|s| s.probe),
         scores.len(),
     );
+    for (seed, s) in seeds.iter().zip(scores) {
+        if !passes(stage, s) {
+            println!("           seed {seed} missed: {s:?}");
+        }
+    }
     passed
 }
 
@@ -153,7 +158,7 @@ fn execute(a: &Args) -> Result<(), String> {
             window: WINDOW,
         };
         let scores = run(life, &a.seeds)?;
-        let passed = report(a.stage, memory, &scores);
+        let passed = report(a.stage, memory, &a.seeds, &scores);
         let leak = a.stage == Stage::Matching
             && memory == Memory::None
             && median(scores.iter().filter_map(|s| s.one).collect()) > NO_MEMORY_CEILING;

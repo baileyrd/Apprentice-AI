@@ -105,3 +105,13 @@ small online learners learn very slowly. A heading would cut that to a
 two-way combination (heading and motor), like turning; but nothing trains
 context units to carry heading through a stare, because learning stays
 local (no backprop through time).
+
+## A world fix after the first judging run, disclosed
+
+The first judging run (seeds 1–20) missed turning at 17/20 for no memory
+and context. Seeds 2 and 11 had two boxes with identical looks (random ±1
+patterns can collide), so their "four distinct boxes" were three; seed 10
+had two looks one number apart. That is a flaw in the world, not the
+learner. Looks are now redrawn until every pair differs in at least 3 of 8
+numbers, and both stages were judged again. First-run results are kept in
+the results section.

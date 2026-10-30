@@ -72,7 +72,7 @@ impl World {
         let mut rng = Rng::new(seed);
         let sides = stage.sides();
         let kinds = sides.iter().max().map_or(0, |m| m + 1);
-        let looks = (0..kinds).map(|_| pattern(&mut rng)).collect();
+        let looks = distinct_patterns(kinds, &mut rng);
         let mut motors = vec![Effect::Left, Effect::Right, Effect::Still];
         shuffle(&mut motors, &mut rng);
         let heading = rng.below(SIDES);
@@ -425,6 +425,26 @@ fn one_hot(i: usize, n: usize) -> Vec<f64> {
     (0..n).map(|j| if i == j { 1.0 } else { 0.0 }).collect()
 }
 
+/// Two looks must differ in at least this many numbers.
+pub const MIN_DIFFERENCE: usize = 3;
+
+/// `n` random patterns of ±1, each differing from every other in at least
+/// [`MIN_DIFFERENCE`] numbers, so different boxes really look different.
+fn distinct_patterns(n: usize, rng: &mut Rng) -> Vec<Sense> {
+    let mut looks: Vec<Sense> = Vec::with_capacity(n);
+    while looks.len() < n {
+        let p = pattern(rng);
+        if looks.iter().all(|l| differing(l, &p) >= MIN_DIFFERENCE) {
+            looks.push(p);
+        }
+    }
+    looks
+}
+
+fn differing(a: &Sense, b: &Sense) -> usize {
+    a.iter().zip(b).filter(|(x, y)| x != y).count()
+}
+
 /// A random pattern of ±1.
 fn pattern(rng: &mut Rng) -> Sense {
     std::array::from_fn(|_| if rng.chance(0.5) { 1.0 } else { -1.0 })
@@ -484,6 +504,19 @@ mod tests {
         assert_eq!(w.sides[0], w.sides[2]);
         assert_ne!(w.sides[1], w.sides[3]);
         assert_eq!(w.looks().len(), 3);
+    }
+
+    #[test]
+    fn looks_differ_in_every_seed() {
+        for seed in 0..200 {
+            let w = World::new(Stage::Turning, seed);
+            let l = w.looks();
+            for i in 0..l.len() {
+                for j in i + 1..l.len() {
+                    assert!(differing(&l[i], &l[j]) >= MIN_DIFFERENCE, "seed {seed}");
+                }
+            }
+        }
     }
 
     #[test]
