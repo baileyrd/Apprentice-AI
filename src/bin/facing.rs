@@ -83,6 +83,7 @@ fn name(m: Memory) -> String {
         Memory::None => "none".into(),
         Memory::Recent(k) => format!("recent {k}"),
         Memory::Context => "context".into(),
+        Memory::Gated => "gated".into(),
     }
 }
 
@@ -123,18 +124,23 @@ fn report(stage: Stage, memory: Memory, seeds: &[u64], scores: &[Score]) -> usiz
     let col = |f: fn(&Score) -> Option<f64>| median(scores.iter().filter_map(f).collect());
     let passed = scores.iter().filter(|s| passes(stage, s)).count();
     println!(
-        "{:<10} {:>6.2} {:>6.2} {:>8.2} {:>6.2}   {passed}/{}",
+        "{:<10} {:>6.2} {:>6.2} {:>8.2} {:>6.2} {:>9.2}   {passed}/{}",
         name(memory),
         col(|s| s.one),
         col(|s| s.two),
         col(|s| s.after_stare),
         col(|s| s.probe),
+        col(|s| s.probe_matching),
         scores.len(),
     );
-    for (seed, s) in seeds.iter().zip(scores) {
-        if !passes(stage, s) {
-            println!("           seed {seed} missed: {s:?}");
-        }
+    let missed: Vec<u64> = seeds
+        .iter()
+        .zip(scores)
+        .filter(|(_, s)| !passes(stage, s))
+        .map(|(&seed, _)| seed)
+        .collect();
+    if !missed.is_empty() && missed.len() < seeds.len() {
+        println!("           missed seeds {missed:?}");
     }
     passed
 }
@@ -147,9 +153,14 @@ fn execute(a: &Args) -> Result<(), String> {
         a.seeds.first(),
         a.seeds.last()
     );
-    println!("memory     one    two  stare5+  probe   passed (medians)");
+    println!("memory     one    two  stare5+  probe  probe NS   passed (medians)");
     let need = (PASS_SHARE * a.seeds.len() as f64).ceil() as usize;
-    for memory in [Memory::None, Memory::Recent(RECENT), Memory::Context] {
+    for memory in [
+        Memory::None,
+        Memory::Recent(RECENT),
+        Memory::Context,
+        Memory::Gated,
+    ] {
         let life = Life {
             stage: a.stage,
             memory,

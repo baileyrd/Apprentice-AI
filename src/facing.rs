@@ -113,6 +113,11 @@ impl World {
         self.heading
     }
 
+    /// Whether the box it faces looks like another box. For scoring only.
+    pub fn faces_matching(&self) -> bool {
+        self.sides.iter().filter(|&&l| l == self.faced()).count() > 1
+    }
+
     /// Senses the box it faces: its look plus fresh noise.
     pub fn sense(&mut self) -> Sense {
         let mut s = self.looks[self.faced()];
@@ -197,6 +202,9 @@ pub enum Memory {
     Recent(usize),
     /// Its own hidden layer from the step before (context units).
     Context,
+    /// Context units, with a separate set of hidden weights per motor:
+    /// the motor picks which set applies.
+    Gated,
 }
 
 /// Predicts the next sensing from this one, the motor, and its memory.
@@ -221,14 +229,16 @@ impl Learner {
         let recall = match memory {
             Memory::None => 0,
             Memory::Recent(k) => k * (FEATURES + motors),
-            Memory::Context => HIDDEN,
+            Memory::Context | Memory::Gated => HIDDEN,
         };
+        // One block of [sense, recall] per motor when gated, else one.
+        let blocks = if memory == Memory::Gated { motors } else { 1 };
         // Memory widens the input, and a delta rule's step grows with the
-        // input's size; scale the rate so every memory learns at the same
-        // pace per step.
+        // active input's size; scale the rate so every memory learns at the
+        // same pace per step.
         let now = FEATURES + motors;
         let net = Net::new(
-            &[now + recall, HIDDEN, FEATURES],
+            &[blocks * (FEATURES + recall) + motors, HIDDEN, FEATURES],
             rate * now as f64 / (now + recall) as f64,
             LEARNING,
             seed,
@@ -264,10 +274,22 @@ impl Learner {
         self.recall = recall;
     }
 
+    /// [sense, motor, recall]; gated, [block per motor, motor], with only
+    /// the fired motor's block holding [sense, recall].
     fn input(&self, recall: &[f64], sense: &[f64], motor: usize) -> Vec<f64> {
-        let mut x = sense.to_vec();
+        if self.memory != Memory::Gated {
+            let mut x = sense.to_vec();
+            x.extend(one_hot(motor, self.motors));
+            x.extend_from_slice(recall);
+            return x;
+        }
+        let block = FEATURES + recall.len();
+        let mut x = vec![0.0; self.motors * block];
+        if let Some(active) = x.get_mut(motor * block..(motor + 1) * block) {
+            active[..FEATURES].copy_from_slice(&sense[..FEATURES]);
+            active[FEATURES..].copy_from_slice(recall);
+        }
         x.extend(one_hot(motor, self.motors));
-        x.extend_from_slice(recall);
         x
     }
 
@@ -282,7 +304,7 @@ impl Learner {
                 r.extend_from_slice(&self.recall[..keep]);
                 r
             }
-            Memory::Context => self.net.hidden(input),
+            Memory::Context | Memory::Gated => self.net.hidden(input),
         }
     }
 }
@@ -343,6 +365,9 @@ pub struct Score {
     pub after_stare: Option<f64>,
     /// Heading read off the hidden layer, on the last `window` turns.
     pub probe: Option<f64>,
+    /// The same, on the last `window` turns that start facing a matching
+    /// box, where the view can't tell heading.
+    pub probe_matching: Option<f64>,
 }
 
 /// A stare this long or longer counts as long.
@@ -366,6 +391,7 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
     let mut driver = Driver::new(&world, seed ^ 0xd21e);
     let mut probe = Probe::new(0.02);
     let (mut ones, mut twos, mut probes, mut long) = (vec![], vec![], vec![], vec![]);
+    let mut probes_matching = vec![];
     let mut sense = world.sense();
     let mut now = driver.drive();
     let mut two_ahead: Option<usize> = None;
@@ -375,6 +401,7 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
         let [one, two] = learner.imagine(&sense, motor, after.0);
         let hidden = learner.hidden(&sense, motor);
         let heading = world.heading();
+        let matching = world.faces_matching();
         world.fire(motor);
         let next = world.sense();
         let truth = world.faced();
@@ -382,7 +409,11 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
         if let Some(stared) = stared {
             let hit = nearest(looks, &one) == truth;
             ones.push(hit);
-            probes.push(probe.read(&hidden) == heading);
+            let read = probe.read(&hidden) == heading;
+            probes.push(read);
+            if matching {
+                probes_matching.push(read);
+            }
             if stared >= LONG_STARE && t >= life.steps / 2 {
                 long.push(hit);
             }
@@ -401,6 +432,7 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
         two: tail_rate(&twos, life.window),
         after_stare: tail_rate(&long, long.len()),
         probe: tail_rate(&probes, life.window),
+        probe_matching: tail_rate(&probes_matching, life.window),
     })
 }
 
@@ -556,6 +588,32 @@ mod tests {
         assert_eq!(&l.recall[..FEATURES], &b);
         assert_eq!(&l.recall[FEATURES..block], &[0.0, 0.0, 1.0]);
         assert_eq!(&l.recall[block..block + FEATURES], &a);
+    }
+
+    #[test]
+    fn gated_input_fills_only_the_fired_motors_block() {
+        let l = Learner::new(Memory::Gated, 3, 0.05, 0).expect("shape");
+        let x = l.input(&[0.25; HIDDEN], &[1.0; FEATURES], 1);
+        let block = FEATURES + HIDDEN;
+        assert_eq!(x.len(), 3 * block + 3);
+        assert!(x[..block].iter().all(|&v| v == 0.0));
+        assert_eq!(&x[block..block + FEATURES], &[1.0; FEATURES]);
+        assert_eq!(&x[block + FEATURES..2 * block], &[0.25; HIDDEN]);
+        assert!(x[2 * block..3 * block].iter().all(|&v| v == 0.0));
+        assert_eq!(&x[3 * block..], &[0.0, 1.0, 0.0]);
+    }
+
+    #[test]
+    fn only_north_and_south_match() {
+        let mut w = World::new(Stage::Matching, 8);
+        let right = motor(&w, Effect::Right);
+        let mut matching = [false; SIDES];
+        for _ in 0..SIDES {
+            matching[w.heading()] = w.faces_matching();
+            w.fire(right);
+        }
+        assert_eq!(matching, [true, false, true, false]);
+        assert!(!World::new(Stage::Turning, 8).faces_matching());
     }
 
     #[test]
