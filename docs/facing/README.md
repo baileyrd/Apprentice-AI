@@ -139,7 +139,7 @@ seeds with colliding looks.)
 | Recent 3 | 0.72      | 0.73      | 0.75             | 0.85  | 0/20          |
 | Context  | 0.73      | 0.73      | 0.75             | 0.83  | 0/20          |
 
-- **No leak.** No memory sits at the expected 75% ceiling.
+- **No leak.** The no-memory control sits at 0.73, under the expected 75% ceiling.
 - **Memory doesn't help yet.** Neither the recent-3 control nor context
   units beat no memory. The probe reads a little more heading from them
   (0.83–0.85 against 0.80), so some trace of the past reaches the hidden
