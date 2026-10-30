@@ -217,3 +217,50 @@ The calibration check rerun with `PatternNet::unseen` on for the whole life
 whether the 128+ bin stops being pessimistic.
 
 Both are reported only; no rule is judged.
+
+## Results of the second follow-up (seeds 101–140, third run)
+
+[results.txt](results.txt) (default) and
+[results-unseen.txt](results-unseen.txt) (`--unseen`), with their CSVs.
+The default run reproduces every earlier number.
+
+### 1. Where the newborn's extra meals come from
+
+Per 1,000 steps (mean [90%]); raw difference E − N:
+
+| | N newborn | E experienced | E − N |
+|---|---|---|---|
+| Hopeful trips | 18.7 [15.9, 21.4] | 6.3 [4.5, 8.2] | −12.3 [−15.3, −9.3] |
+| Meals at target | 1.12 [0.81, 1.44] | 0.60 [0.37, 0.83] | −0.53 [−0.91, −0.14] |
+| Meals en route | 3.05 [2.57, 3.53] | 0.85 [0.51, 1.19] | −2.20 [−2.73, −1.67] |
+| Meals off any trip | 16.5 [14.8, 18.2] | 14.6 [12.9, 16.3] | −1.94 [−3.83, −0.05] |
+| All meals | 20.7 | 16.0 | −4.66 |
+
+- The experienced apprentice makes a third as many hopeful trips.
+- **Hopeful trips pay mostly on the way**: en-route meals are 47% of the
+  meal gap (2.20 of 4.66), meals at the hoped-for square 11%. A newborn
+  hopes for one square, goes, and eats what it passes.
+- Wiping the patterns restores trips (16.9) and en-route meals (2.62);
+  wiping its own values restores neither (7.5, 0.95).
+
+Volatility at the start of world 5 is 0.0003 after the upbringing (0 for a
+newborn), so the planner's staleness pull, volatility × steps unseen, is
+near zero either way: it takes about 3,000 steps unseen to reach its cap.
+Squares never seen get the full pull. The experienced apprentice still
+remembers when it last saw each square in its own frame, from earlier
+worlds, so world 5's squares do not count as unseen for it. A newborn's do.
+
+### 2. Calibration at 128+ steps unseen, with time-unseen on
+
+| Arm | Predicted / actual | Bias [90%] |
+|---|---|---|
+| E experienced | 0.042 / 0.071 | −0.023 [−0.034, −0.013], **pessimistic** |
+| P, M, V, PV | 0.039–0.046 / 0.068–0.075 | −0.018 to −0.020, all **pessimistic** |
+| F all wiped | 0.053 / 0.067 | +0.003 [−0.006, +0.012] |
+| N newborn | 0.057 / 0.065 | +0.011 [−0.008, +0.030] |
+
+Time-unseen raises every arm's prediction at 128+ (E 0.009 → 0.042) and
+removes the newborn's pessimism there. Every experienced arm stays
+pessimistic, though less so (E −0.035 → −0.023). Only a full wipe matches
+the newborn, as for sleeps. In this run the experienced apprentice's sleep
+gap to a newborn is +1.6 [−1.5, +4.7] (default +3.4 [+2.3, +4.4]).
