@@ -87,6 +87,41 @@ My guess when the rules were written (before either fix): rules 1 and 2 met if t
 at risk in bush worlds, where summing food along a path may pull it toward
 clusters of bushes not yet regrown; rule 4 unclear.
 
+## A second false-hope mark (Nano, 2026-10-30, fixed before the verdict)
+
+Added while the 200-seed run was going, before its verdict was read. It
+is a second judgement, not a rewrite: rule 3's 10% mark on barren false
+hopes is still reported as it stands. The other rule 3 marks and rule 4
+are unchanged.
+
+**3b′. False hopes cost less than half of what the fix saves.** In the
+barren test world, per 1,000 steps, paired by seed:
+
+    (extra false hopes) × W  ≤  0.5 × (sleeps saved) × S
+
+judged on the mean of each seed's left side less right side, met only if
+the 90% interval's upper end is at most 0 (missed if its lower end is
+above 0). False hopes are counted over the world's first 1,000 steps;
+sleeps over all 2,000, halved.
+
+Costs, measured once on today's default apprentice (the A arm) in the
+barren test world of seeds 101–110 (`cargo run --release --example
+hope_costs`), and not to be adjusted afterwards:
+
+- **W = 0.50 steps per false hope**: steps spent closing on the square,
+  in the run just before the sighting in which its distance fell every
+  step, plus steps after while it still fell. Only 6 false hopes in those
+  10 lives, so W rests on little: most false hopes are noticed in passing.
+- **S = 3.69 steps per sleep**: a sleep takes no steps in this world; it
+  wakes on the start square, so S is the shortest walk around walls from
+  there back to where it fell asleep (562 sleeps).
+
+`cargo run --release --bin hope_mark -- runs/sweep/sweep.csv` prints the
+verdict from the judging run's CSV.
+
+One candidate only: the combined fix (S). Time-unseen alone is not judged
+on these seeds.
+
 ## Tuning (seeds 101–110)
 
 `cargo run --release --bin sweep` (two settings; tuning compared four).

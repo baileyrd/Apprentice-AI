@@ -100,6 +100,16 @@ impl Interval {
         })
     }
 
+    /// Mean of `xs`, with a 90% normal interval.
+    pub fn mean(xs: &[f64]) -> Result<Self, JudgeError> {
+        let (mean, se) = mean_and_error(xs)?;
+        Ok(Self {
+            lo: mean - Z90 * se,
+            mid: mean,
+            hi: mean + Z90 * se,
+        })
+    }
+
     /// Median of `xs`, with the distribution-free interval between the
     /// order statistics that cover it 90% of the time.
     pub fn median(xs: &[f64]) -> Result<Self, JudgeError> {
@@ -169,6 +179,15 @@ fn mean_and_error(xs: &[f64]) -> Result<(f64, f64), JudgeError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_mean_carries_a_normal_interval() {
+        let i = Interval::mean(&[1.0, 2.0, 3.0]).expect("judged");
+        assert_eq!(i.mid, 2.0);
+        let half = Z90 * (1.0_f64 / 3.0).sqrt();
+        assert!((i.hi - 2.0 - half).abs() < 1e-12 && (2.0 - i.lo - half).abs() < 1e-12);
+        assert_eq!(Interval::mean(&[1.0]), Err(JudgeError::TooFew(1)));
+    }
 
     #[test]
     fn halving_every_seed_is_a_sure_half() {
