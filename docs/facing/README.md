@@ -115,3 +115,38 @@ had two looks one number apart. That is a flaw in the world, not the
 learner. Looks are now redrawn until every pair differs in at least 3 of 8
 numbers, and both stages were judged again. First-run results are kept in
 the results section.
+
+## Results (seeds 1–20)
+
+Medians over seeds; accuracy over the last 100 turns.
+
+**Turning (8,000 steps): met for every memory.**
+
+| Memory   | One-ahead | Two-ahead | After stares ≥ 5 | Probe | Seeds passing |
+|----------|-----------|-----------|------------------|-------|---------------|
+| None     | 1.00      | 1.00      | 1.00             | 1.00  | 20/20         |
+| Recent 3 | 1.00      | 0.99      | 0.97             | 1.00  | 20/20         |
+| Context  | 1.00      | 1.00      | 1.00             | 1.00  | 20/20         |
+
+(First run, before the look fix: 17/20, 16/20, 17/20; the misses were the
+seeds with colliding looks.)
+
+**Matching (20,000 steps): missed for every memory.**
+
+| Memory   | One-ahead | Two-ahead | After stares ≥ 5 | Probe | Seeds passing |
+|----------|-----------|-----------|------------------|-------|---------------|
+| None     | 0.73      | 0.73      | 0.75             | 0.80  | 0/20          |
+| Recent 3 | 0.72      | 0.73      | 0.75             | 0.85  | 0/20          |
+| Context  | 0.73      | 0.73      | 0.75             | 0.83  | 0/20          |
+
+- **No leak.** No memory sits at the expected 75% ceiling.
+- **Memory doesn't help yet.** Neither the recent-3 control nor context
+  units beat no memory. The probe reads a little more heading from them
+  (0.83–0.85 against 0.80), so some trace of the past reaches the hidden
+  layer, but the prediction doesn't use it.
+- **Cause, as far as checked:** the three-way parity above. The control
+  rules out "context units can't hold it" as the whole story: recent 3
+  holds the answer verbatim for stares of 2 or less and still doesn't
+  learn to use it within the budget.
+
+Run: `cargo run --release --bin facing -- --stage turning|matching --judge`.
