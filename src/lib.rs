@@ -7,6 +7,7 @@ pub mod adaptation;
 pub mod agent;
 pub mod apprentice;
 pub mod body;
+pub mod eprop;
 pub mod experiment;
 pub mod facing;
 pub mod gru;

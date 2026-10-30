@@ -11,6 +11,7 @@
 //!
 //! Separate from the grid world: nothing here touches the main apprentice.
 
+use crate::eprop::Eprop;
 use crate::gru::{Gru, Sample, Training};
 use crate::network::{Learning, Net, NetError};
 use crate::rng::Rng;
@@ -513,19 +514,125 @@ pub struct Life {
 
 /// Lives `life` on `seed` and scores it.
 pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
-    let mut world = World::new(life.stage, seed);
+    let world = World::new(life.stage, seed);
     let percept = FEATURES + if life.ring { SIDES } else { 0 };
-    let mut learner = Learner::new(
+    let learner = Learner::new(
         life.memory,
         percept,
         world.motors(),
         life.rate,
         seed ^ 0x5eed,
     )?;
+    Ok(score(world, learner, life, seed))
+}
+
+/// Anything that learns online to predict the next percept, with a hidden
+/// layer to probe.
+trait Predictor {
+    /// Hidden units the probes read.
+    fn width(&self) -> usize;
+    /// Its hidden activity on this step, and its predictions one and two
+    /// steps on (the second given motor `after`). Changes nothing.
+    fn foresee(&self, percept: &[f64], motor: usize, after: usize) -> [Vec<f64>; 3];
+    /// Learns that `percept` and `motor` led to `next`, and moves on.
+    fn learn(&mut self, percept: &[f64], motor: usize, next: &[f64]);
+}
+
+impl Predictor for Learner {
+    fn width(&self) -> usize {
+        HIDDEN
+    }
+
+    fn foresee(&self, percept: &[f64], motor: usize, after: usize) -> [Vec<f64>; 3] {
+        let [one, two] = self.imagine(percept, motor, after);
+        [self.hidden(percept, motor), one, two]
+    }
+
+    fn learn(&mut self, percept: &[f64], motor: usize, next: &[f64]) {
+        Learner::learn(self, percept, motor, next);
+    }
+}
+
+/// An e-prop network on the facing body: input is the percept and the
+/// motor's one-hot.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EpropLearner {
+    net: Eprop,
+    motors: usize,
+}
+
+impl EpropLearner {
+    pub fn new(net: Eprop, motors: usize) -> Self {
+        Self { net, motors }
+    }
+
+    fn input(&self, percept: &[f64], motor: usize) -> Vec<f64> {
+        let mut x = percept.to_vec();
+        x.extend(one_hot(motor, self.motors));
+        x
+    }
+}
+
+impl Predictor for EpropLearner {
+    fn width(&self) -> usize {
+        self.net.units()
+    }
+
+    fn foresee(&self, percept: &[f64], motor: usize, after: usize) -> [Vec<f64>; 3] {
+        let (h1, one) = self.net.peek(self.net.state(), &self.input(percept, motor));
+        let two = self.net.peek(&h1, &self.input(&one, after)).1;
+        [h1, one, two]
+    }
+
+    fn learn(&mut self, percept: &[f64], motor: usize, next: &[f64]) {
+        self.net.advance(&self.input(percept, motor), next);
+    }
+}
+
+/// E-prop's settings (see `docs/facing/README.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EpropLife {
+    pub stage: Stage,
+    pub steps: usize,
+    pub units: usize,
+    pub leaks: (f64, f64),
+    pub rate: f64,
+    pub window: usize,
+}
+
+/// Lives `life` on `seed` with an e-prop network (always with the ring)
+/// and scores it like [`live`].
+pub fn live_eprop(life: &EpropLife, seed: u64) -> Score {
+    let world = World::new(life.stage, seed);
+    let percept = FEATURES + SIDES;
+    let net = Eprop::new(
+        percept + world.motors(),
+        life.units,
+        percept,
+        life.leaks,
+        life.rate,
+        seed ^ 0x5eed,
+    );
+    let learner = EpropLearner::new(net, world.motors());
+    let as_life = Life {
+        stage: life.stage,
+        memory: Memory::None,
+        ring: true,
+        steps: life.steps,
+        rate: life.rate,
+        window: life.window,
+    };
+    score(world, learner, &as_life, seed)
+}
+
+/// Lives with random motors, `learner` predicting and learning online, and
+/// scores it. Only `life`'s stage, ring, steps and window are read.
+fn score<P: Predictor>(mut world: World, mut learner: P, life: &Life, seed: u64) -> Score {
+    let width = learner.width();
     let mut driver = Driver::new(&world, seed ^ 0xd21e);
-    let mut probe = Probe::new(SIDES, HIDDEN, 0.02);
-    let mut place_probe = Probe::new(SIDES + 1, HIDDEN, 0.02);
-    let mut centre_probe = Probe::new(SIDES + 1, HIDDEN, 0.02);
+    let mut probe = Probe::new(SIDES, width, 0.02);
+    let mut place_probe = Probe::new(SIDES + 1, width, 0.02);
+    let mut centre_probe = Probe::new(SIDES + 1, width, 0.02);
     let (mut places, mut centres) = (vec![], vec![]);
     let (mut ones, mut twos, mut probes, mut long) = (vec![], vec![], vec![], vec![]);
     let (mut probes_matching, mut headings_matching) = (vec![], vec![]);
@@ -535,8 +642,7 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
     for t in 0..life.steps {
         let after = driver.drive();
         let (motor, stared) = now;
-        let [one, two] = learner.imagine(&sense, motor, after.0);
-        let hidden = learner.hidden(&sense, motor);
+        let [hidden, one, two] = learner.foresee(&sense, motor, after.0);
         let heading = world.heading();
         let matching = world.faces_matching();
         let stands = place(world.at());
@@ -575,7 +681,7 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
         sense = next;
         now = after;
     }
-    Ok(Score {
+    Score {
         one: tail_rate(&ones, life.window),
         two: tail_rate(&twos, life.window),
         after_stare: tail_rate(&long, long.len()),
@@ -584,7 +690,7 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
         majority_matching: majority(&headings_matching, life.window),
         probe_place: tail_rate(&places, life.window),
         probe_centre: tail_rate(&centres, life.window),
-    })
+    }
 }
 
 /// Share of the most common value among the last `window` entries.

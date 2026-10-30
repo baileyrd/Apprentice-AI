@@ -5,11 +5,14 @@
 use std::process::ExitCode;
 use std::thread;
 
-use apprentice::facing::{Ceiling, Life, Memory, Score, Stage, ceiling, live};
+use apprentice::facing::{
+    Ceiling, EpropLife, Life, Memory, Score, Stage, ceiling, live, live_eprop,
+};
 use apprentice::gru::Training;
 
 const USAGE: &str = "\
-usage: facing [--stage turning|matching|walking] [--ring] [--gru] [--seeds N]
+usage: facing [--stage turning|matching|walking] [--ring] [--gru] [--eprop]
+              [--seeds N]
               [--from SEED] [--judge] [--steps S] [--rate R]
 
 Seeds FROM..FROM+N-1 (default 101..110, the tuning seeds), or with --judge
@@ -17,7 +20,8 @@ seeds 1-20. Runs every memory on the stage (default turning) for S steps
 (default: the stage's budget) at learning rate R (default 0.05), prints
 each memory's scores and verdict. With --ring every learner also gets the
 innate heading ring. With --gru, runs the GRU ceiling check instead (always
-with the ring).";
+with the ring); with --eprop, the online e-prop network (always with the
+ring, rate R).";
 
 /// Turns at the end over which accuracy is scored.
 const WINDOW: usize = 100;
@@ -39,6 +43,7 @@ struct Args {
     rate: f64,
     ring: bool,
     gru: bool,
+    eprop: bool,
 }
 
 fn budget(stage: Stage) -> usize {
@@ -57,6 +62,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
         rate: 0.05,
         ring: false,
         gru: false,
+        eprop: false,
     };
     let (mut n, mut from) = (10, 101);
     let mut it = args.iter();
@@ -67,6 +73,10 @@ fn parse(args: &[String]) -> Result<Args, String> {
         }
         if flag == "--gru" {
             a.gru = true;
+            continue;
+        }
+        if flag == "--eprop" {
+            a.eprop = true;
             continue;
         }
         if flag == "--judge" {
@@ -200,16 +210,58 @@ fn execute_ceiling(a: &Args) -> Result<(), String> {
         .into_iter()
         .map(|h| h.join().map_err(|_| "a life panicked".to_string()))
         .collect::<Result<Vec<Score>, String>>()?;
-    let passed = report(a.stage, "gru", &a.seeds, &scores);
+    verdict(a, "gru", &scores);
+    Ok(())
+}
+
+/// E-prop, online: 64 leaky units, leaks 0.5-0.95, 400,000 steps unless
+/// --steps says otherwise. Always with the ring.
+fn execute_eprop(a: &Args) -> Result<(), String> {
+    let life = EpropLife {
+        stage: a.stage,
+        steps: a.steps.unwrap_or(400_000),
+        units: 64,
+        leaks: (0.5, 0.95),
+        rate: a.rate,
+        window: WINDOW,
+    };
+    println!(
+        "e-prop, stage {:?}, {} steps, rate {}, seeds {:?}..={:?}",
+        life.stage,
+        life.steps,
+        life.rate,
+        a.seeds.first(),
+        a.seeds.last()
+    );
+    println!(
+        "learner    one    two  stare5+  probe  probe NS  most NS  place  centre   passed (medians)"
+    );
+    let handles: Vec<_> = a
+        .seeds
+        .iter()
+        .map(|&seed| thread::spawn(move || live_eprop(&life, seed)))
+        .collect();
+    let scores = handles
+        .into_iter()
+        .map(|h| h.join().map_err(|_| "a life panicked".to_string()))
+        .collect::<Result<Vec<Score>, String>>()?;
+    verdict(a, "e-prop", &scores);
+    Ok(())
+}
+
+fn verdict(a: &Args, label: &str, scores: &[Score]) {
+    let passed = report(a.stage, label, &a.seeds, scores);
     let need = (PASS_SHARE * a.seeds.len() as f64).ceil() as usize;
     let verdict = if passed >= need { "met" } else { "missed" };
     println!("           -> {verdict} (need {need})");
-    Ok(())
 }
 
 fn execute(a: &Args) -> Result<(), String> {
     if a.gru {
         return execute_ceiling(a);
+    }
+    if a.eprop {
+        return execute_eprop(a);
     }
     let steps = a.steps.unwrap_or(budget(a.stage));
     println!(
