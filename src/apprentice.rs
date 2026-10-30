@@ -105,6 +105,10 @@ pub struct Drives {
     /// Whether a plan counts the food on every square of its path, not only
     /// the best square it reaches: many small chances add up to a search.
     pub sweep: bool,
+    /// Least rate at which a square's staleness grows per step unseen,
+    /// whatever volatility it has learned: a square unseen for 1/revisit
+    /// steps pulls like one never seen. Zero leaves it to volatility.
+    pub revisit: f64,
 }
 
 impl Default for Drives {
@@ -119,6 +123,7 @@ impl Default for Drives {
             scale: 25.0,
             optimism: 25.0,
             sweep: false,
+            revisit: 0.0,
         }
     }
 }
@@ -287,7 +292,10 @@ impl<M: WorldModel> Apprentice<M> {
         let b = self.model.predict(at);
         let unsure = 1.0 - b.iter().map(|p| p * p).sum::<f64>();
         let stale = match self.last_seen.get(&at) {
-            Some(&last) => (self.volatility * (self.t - last) as f64).min(1.0),
+            Some(&last) => {
+                let rate = self.volatility.max(self.drives.revisit);
+                (rate * (self.t - last) as f64).min(1.0)
+            }
             None => 1.0,
         };
         unsure + stale
@@ -739,6 +747,17 @@ mod tests {
         full.valence.rest = 50.0;
         assert_eq!(full.act(&open(100)), Action::Rest);
         assert_eq!(full.goal(), None);
+    }
+
+    #[test]
+    fn revisit_makes_a_long_unseen_square_as_stale_as_a_new_one() {
+        let mut a = apprentice(0.5);
+        a.last_seen.insert(ORIGIN, 0);
+        a.t = 8;
+        let before = a.novelty(ORIGIN);
+        a.drives.revisit = 1.0 / 8.0;
+        let after = a.novelty(ORIGIN);
+        assert!((after - before - 1.0).abs() < 1e-12, "{before} -> {after}");
     }
 
     #[test]

@@ -51,8 +51,10 @@ Raw differences are reported next to percentages.
    upbringing sleeps, barren upbringing sleeps, home-test wrong answers at
    100 steps.
 
-Reported only, never a mark: false hopes (barren and bush), hopeful trips
-with their at-target and en-route meals, bush meals.
+Reported only, never a mark: false hopes (barren and bush), bush meals,
+and, from `decline --revisit RATE` on seeds 101–140, hopeful trips with
+their at-target and en-route meals (experienced and newborn, against the
+same arms without revisit).
 
 My guess before running: 2 met; 1 unclear; 3 missed (PR #26 suggests the
 decline has more than one part); 4 at risk on bush sleeps, since looking

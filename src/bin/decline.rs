@@ -21,7 +21,7 @@ use apprentice::sim::{Event, Outcome, Sim};
 use apprentice::world::{Cell, Pos};
 
 const USAGE: &str = "\
-usage: decline [--seeds N] [--from SEED] [--unseen] [--out DIR]
+usage: decline [--seeds N] [--from SEED] [--unseen] [--revisit RATE] [--out DIR]
 
 Seeds FROM..FROM+N-1 (default 101..140, tuning seeds). Lives world 5 of a
 barren-first life seven ways (E experienced, P patterns wiped, M maps
@@ -29,7 +29,8 @@ wiped, V own values wiped, PV patterns and values wiped, F all three wiped,
 N newborn). Prints each arm against the newborn, meals on hopeful trips,
 and the calibration of eaten squares by time since last seen; writes
 DIR/decline.csv and DIR/calibration.csv (default DIR: runs/decline).
---unseen raises every arm with patterns that see time unseen.";
+--unseen raises every arm with patterns that see time unseen; --revisit
+sets Drives::revisit for every arm.";
 
 type Error = Box<dyn std::error::Error>;
 
@@ -75,12 +76,15 @@ struct Args {
     out: PathBuf,
     /// Patterns that also see how long a square went unseen.
     unseen: bool,
+    /// `Drives::revisit` for every arm.
+    revisit: f64,
 }
 
 fn parse(args: &[String]) -> Result<Args, String> {
     let (mut count, mut from) = (40, 101);
     let mut out = PathBuf::from("runs/decline");
     let mut unseen = false;
+    let mut revisit = 0.0;
     let mut it = args.iter();
     while let Some(flag) = it.next() {
         if flag == "--unseen" {
@@ -93,6 +97,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
             "--seeds" => count = value.parse().map_err(|_| bad())?,
             "--from" => from = value.parse().map_err(|_| bad())?,
             "--out" => out = PathBuf::from(value),
+            "--revisit" => revisit = value.parse().map_err(|_| bad())?,
             _ => return Err(format!("unknown flag: {flag}")),
         }
     }
@@ -103,6 +108,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
         seeds: (from..from + count).collect(),
         out,
         unseen,
+        revisit,
     })
 }
 
@@ -231,11 +237,10 @@ struct World {
 
 /// World 5 of `seed`'s barren-first life under `recall`, with `arm` wiped
 /// first.
-fn world_five(seed: u64, arm: Arm, recall: Recall) -> Result<World, Error> {
-    let setting = Setting::from(recall);
+fn world_five(seed: u64, arm: Arm, setting: Setting) -> Result<World, Error> {
     let mut mind = if arm == Arm::Newborn {
         let memory = Memory::new(Rates::default(), setting.recall);
-        Apprentice::with_model(Drives::default(), memory, seed)
+        Apprentice::with_model(setting.drives, memory, seed)
     } else {
         raise(setting, seed, &barren())?.0
     };
@@ -266,12 +271,12 @@ fn world_five(seed: u64, arm: Arm, recall: Recall) -> Result<World, Error> {
 /// One seed and world 5 under each arm, in `ARMS` order.
 type Row = (u64, Vec<World>);
 
-fn rows(seeds: &[u64], recall: Recall) -> Result<Vec<Row>, Error> {
+fn rows(seeds: &[u64], setting: Setting) -> Result<Vec<Row>, Error> {
     let workers = thread::available_parallelism().map_or(1, |n| n.get());
     let chunk = seeds.len().div_ceil(workers).max(1);
     let one = |seed: u64| -> Result<Row, String> {
         let worlds: Result<Vec<World>, Error> =
-            ARMS.iter().map(|&a| world_five(seed, a, recall)).collect();
+            ARMS.iter().map(|&a| world_five(seed, a, setting)).collect();
         Ok((seed, worlds.map_err(|e| format!("seed {seed}: {e}"))?))
     };
     let parts: Vec<Result<Vec<Row>, String>> = thread::scope(|scope| {
@@ -433,7 +438,14 @@ fn execute(args: &Args) -> Result<(), Error> {
         }),
         ..Recall::default()
     };
-    let rows = rows(&args.seeds, recall)?;
+    let setting = Setting {
+        drives: Drives {
+            revisit: args.revisit,
+            ..Drives::default()
+        },
+        ..Setting::from(recall)
+    };
+    let rows = rows(&args.seeds, setting)?;
     for measure in MEASURES {
         report(&rows, measure)?;
     }
