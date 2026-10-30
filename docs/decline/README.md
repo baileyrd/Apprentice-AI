@@ -248,7 +248,8 @@ newborn), so the planner's staleness pull, volatility × steps unseen, is
 near zero either way: it takes about 3,000 steps unseen to reach its cap.
 Squares never seen get the full pull. The experienced apprentice still
 remembers when it last saw each square in its own frame, from earlier
-worlds, so world 5's squares do not count as unseen for it. A newborn's do.
+worlds, so many of world 5's squares likely do not count as never seen
+for it (not checked). For a newborn they all do.
 
 ### 2. Calibration at 128+ steps unseen, with time-unseen on
 
