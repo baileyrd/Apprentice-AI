@@ -1,0 +1,27 @@
+1. bush replays, B vs A -73% [-73%, -72%]: met
+2. B vs A, each at most +10%:
+   bush_sleeps +1% [-7%, +10%]: met
+   barren_sleeps +0% [-1%, +2%]: met
+   barren_hopes -3% [-15%, +10%]: met
+   home_wrong_100 -5% [-10%, +1%]: met
+3. D vs A, each at most +10%:
+   bush_sleeps +34% [+25%, +45%]: missed
+   barren_sleeps -52% [-53%, -51%]: met
+   barren_hopes +578% [+454%, +730%]: missed
+   home_wrong_100 -17% [-21%, -12%]: met
+4. bush sleeps, D vs C +20% [+13%, +27%]: missed
+Means (A, B, C, D):
+   bush_replayed: 35864.3, 9913.0, 6088.2, 2540.9
+   bush_sleeps: 14.2, 14.1, 13.6, 16.0
+   barren_sleeps: 56.3, 56.5, 26.7, 26.9
+   barren_hopes: 1.7, 1.0, 19.6, 21.4
+   home_wrong_100: 0.6, 0.5, 0.2, 0.2
+   home_wrong_300: 0.5, 0.5, 0.2, 0.3
+   raised_sleeps: 64.9, 65.9, 48.0, 51.0
+   bush_meals: 278.7, 279.5, 280.7, 275.6
+   barren_meals: 32.5, 32.3, 102.9, 102.8
+   bush_naps: 55.3, 55.5, 6.4, 6.0
+
+real	95m10.911s
+user	374m12.730s
+sys	0m28.329s

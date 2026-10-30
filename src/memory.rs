@@ -97,7 +97,27 @@ pub struct Recall {
     /// A network to hold the general patterns (the default since PR #22);
     /// `None` keeps the table.
     pub pattern_net: Option<PatternNet>,
+    /// Most diary entries, besides meals, one sleep replays into the map:
+    /// the most "surprising". `None` replays them all.
+    pub replay_budget: Option<usize>,
+    /// How sleep teaches the patterns' network; `None` teaches it every
+    /// diary entry.
+    pub net_replay: Option<NetReplay>,
 }
+
+/// Selective sleep for the patterns: today's most "surprising" entries,
+/// after a rehearsal of samples kept from earlier sleeps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NetReplay {
+    /// Most of today's entries taught.
+    pub budget: usize,
+    /// Older samples replayed first, spread over the kept store.
+    pub rehearsal: usize,
+}
+
+/// Samples kept for rehearsal, and how often one of a day's is kept.
+const KEPT: usize = 512;
+const KEEP_EVERY: usize = 8;
 
 /// What active memory lets through to the diary.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -131,6 +151,10 @@ pub struct Traffic {
     pub unexpected: u64,
     /// Those written into the diary.
     pub unexpected_written: u64,
+    /// Diary entries replayed into a map in sleep.
+    pub replayed: u64,
+    /// Samples the patterns learned from in sleep.
+    pub taught: u64,
 }
 
 impl Default for Recall {
@@ -149,6 +173,8 @@ impl Default for Recall {
             pattern_min: 20,
             gate: None,
             pattern_net: Some(PatternNet::default()),
+            replay_budget: None,
+            net_replay: None,
         }
     }
 }
@@ -190,12 +216,31 @@ pub enum Source {
 }
 
 /// A sighting in the diary, with the square's state, that state's age and
-/// its word just before it.
-type Sighting = (Pos, Cell, Option<(Last, u64, Option<Said>)>);
+/// its word just before it, and its "surprise".
+type Sighting = (Pos, Cell, Option<(Last, u64, Option<Said>)>, f64);
 
 /// A sighting that confirmed a pattern: the square's state, the start of
 /// its age group, any word said, and what was seen.
 type Confirmation = (Last, u64, Option<Said>, Cell);
+
+/// What a pattern learns from: a square's state, its age, any word said,
+/// and what was seen.
+type Sample = (Last, u64, Option<Said>, Cell);
+
+/// Which of `diary` sleep replays: all without a budget, else the `budget`
+/// most "surprising", ties going to the most recent.
+fn chosen(diary: &[Sighting], budget: Option<usize>) -> Vec<bool> {
+    let Some(budget) = budget.filter(|&b| b < diary.len()) else {
+        return vec![true; diary.len()];
+    };
+    let mut order: Vec<usize> = (0..diary.len()).collect();
+    order.sort_by(|&i, &j| diary[j].3.total_cmp(&diary[i].3).then(j.cmp(&i)));
+    let mut replay = vec![false; diary.len()];
+    for &i in &order[..budget] {
+        replay[i] = true;
+    }
+    replay
+}
 
 /// One slow map and what memory keeps about it.
 #[derive(Debug, Clone)]
@@ -266,6 +311,10 @@ pub struct Memory {
     /// Those sightings counted by the pattern they confirm: state, age
     /// group, word, and what was seen.
     tally: HashMap<Confirmation, u32>,
+    /// Pattern samples kept from earlier sleeps for rehearsal, and how many
+    /// have been offered.
+    kept: Vec<Sample>,
+    offered: usize,
     traffic: Traffic,
 }
 
@@ -297,6 +346,8 @@ impl Memory {
             working: Vec::new(),
             confirmed: HashSet::new(),
             tally: HashMap::new(),
+            kept: Vec::new(),
+            offered: 0,
             traffic: Traffic::default(),
         }
     }
@@ -454,23 +505,27 @@ impl Memory {
         let (d, m) = self.settled();
         if self.recall.patterns {
             // Confirmations first, so today's surprises stay the most recent.
-            for (&(last, age, said, sensed), &n) in &self.tally {
+            let tallied: Vec<(Sample, u32)> = self.tally.iter().map(|(&c, &n)| (c, n)).collect();
+            for (sample, n) in tallied {
                 for _ in 0..n {
-                    self.patterns.learn(last, age, said, sensed);
+                    self.teach(sample);
                 }
             }
+            self.teach_patterns(d);
         }
         let ctx = &mut self.contexts[self.active];
         let mut rehearsed = HashSet::new();
-        for &(at, sensed, before) in &self.diary[..d] {
+        let replay = chosen(&self.diary[..d], self.recall.replay_budget);
+        for (i, &(at, sensed, _, _)) in self.diary[..d].iter().enumerate() {
+            if !replay[i] {
+                continue;
+            }
             if ctx.map.believes(at) == Some(sensed) {
                 *ctx.stiffness.entry(at).or_insert(0) += 1;
             }
             ctx.map.learn(at, sensed);
             rehearsed.insert(at);
-            if let (true, Some((last, age, said))) = (self.recall.patterns, before) {
-                self.patterns.learn(last, age, said, sensed);
-            }
+            self.traffic.replayed += 1;
         }
         for &at in &self.meals[..m] {
             for _ in 0..self.recall.meal_replays {
@@ -496,6 +551,55 @@ impl Memory {
         self.confirmed.clear();
         self.tally.clear();
         self.last_sleep = self.t;
+    }
+
+    fn teach(&mut self, (last, age, said, sensed): Sample) {
+        self.patterns.learn(last, age, said, sensed);
+        self.traffic.taught += 1;
+    }
+
+    /// Teaches the patterns from the first `d` diary entries: all of them,
+    /// or with `net_replay` a rehearsal of kept samples, then the most
+    /// "surprising" of today's. Keeps some of today's for later.
+    fn teach_patterns(&mut self, d: usize) {
+        let today: Vec<Sighting> = self.diary[..d]
+            .iter()
+            .filter(|e| e.2.is_some())
+            .copied()
+            .collect();
+        let sample = |e: &Sighting| e.2.map(|(last, age, said)| (last, age, said, e.1));
+        let Some(r) = self.recall.net_replay else {
+            for s in today.iter().filter_map(sample) {
+                self.teach(s);
+            }
+            return;
+        };
+        let n = self.kept.len();
+        let rehearsed: Vec<Sample> = (0..r.rehearsal.min(n))
+            .map(|k| self.kept[k * n / r.rehearsal.min(n)])
+            .collect();
+        for s in rehearsed {
+            self.teach(s);
+        }
+        let chosen = chosen(&today, Some(r.budget));
+        for (e, _) in today.iter().zip(&chosen).filter(|(_, c)| **c) {
+            if let Some(s) = sample(e) {
+                self.teach(s);
+            }
+        }
+        for s in today.iter().step_by(KEEP_EVERY).filter_map(sample) {
+            self.keep(s);
+        }
+    }
+
+    /// Keeps `sample` for rehearsal, in place of the oldest once full.
+    fn keep(&mut self, sample: Sample) {
+        if self.kept.len() < KEPT {
+            self.kept.push(sample);
+        } else {
+            self.kept[self.offered % KEPT] = sample;
+        }
+        self.offered += 1;
     }
 
     /// Diary and meal entries it is sure belong to the active map: while in
@@ -605,8 +709,8 @@ impl WorldModel for Memory {
         }
         if written {
             self.fast.insert(at, fast);
-            self.diary
-                .push((at, sensed, before.map(|s| (s.last, t - s.since, s.said))));
+            let state = before.map(|s| (s.last, t - s.since, s.said));
+            self.diary.push((at, sensed, state, surprise));
         } else {
             self.confirmed.insert(at);
             if let Some(s) = before {
@@ -1125,6 +1229,58 @@ mod tests {
         m.observe(&at(ORIGIN, corner()));
         assert_eq!(m.diary.len(), 9);
         assert!(m.working.is_empty() && m.confirmed.is_empty());
+    }
+
+    #[test]
+    fn a_budget_replays_the_most_surprising_ties_going_to_the_latest() {
+        let entry = |x: i32, e: f64| (Pos { x, y: 0 }, Cell::Empty, None, e);
+        let diary = [entry(0, 0.5), entry(1, 0.1), entry(2, 0.5), entry(3, 0.9)];
+        assert_eq!(chosen(&diary, Some(2)), [false, false, true, true]);
+        assert_eq!(chosen(&diary, None), [true; 4]);
+        assert_eq!(chosen(&diary, Some(9)), [true; 4]);
+    }
+
+    #[test]
+    fn with_a_budget_sleep_learns_only_what_surprised_it() {
+        let mut m = Memory::new(
+            Rates::default(),
+            Recall {
+                replay_budget: Some(1),
+                ..Recall::default()
+            },
+        );
+        let (wall, open) = (Pos { x: -1, y: -1 }, Pos { x: 1, y: 1 });
+        m.diary = vec![
+            (wall, Cell::Wall, None, 0.9),
+            (open, Cell::Empty, None, 0.2),
+        ];
+        m.sleep();
+        assert_eq!(m.traffic().replayed, 1);
+        let map = &m.contexts[0].map;
+        assert!(map.knows(wall), "the surprise was not replayed");
+        assert!(!map.knows(open), "more than the budget was replayed");
+    }
+
+    #[test]
+    fn a_network_budget_teaches_rehearsal_then_todays_surprises() {
+        let mut m = Memory::new(
+            Rates::default(),
+            Recall {
+                net_replay: Some(NetReplay {
+                    budget: 2,
+                    rehearsal: 3,
+                }),
+                ..Recall::default()
+            },
+        );
+        let entry = |x: i32, e: f64| (Pos { x, y: 0 }, Cell::Empty, Some((Last::Ate, 5, None)), e);
+        m.diary = (0..16).map(|x| entry(x, f64::from(x))).collect();
+        m.sleep();
+        assert_eq!(m.traffic().taught, 2, "nothing kept to rehearse yet");
+        assert_eq!(m.kept.len(), 2, "every 8th of the day is kept");
+        m.diary = (0..16).map(|x| entry(x, f64::from(x))).collect();
+        m.sleep();
+        assert_eq!(m.traffic().taught, 2 + 2 + 2, "both kept, then the budget");
     }
 
     #[test]
