@@ -77,3 +77,23 @@ of the default (the guard is 7.7). Only 1/128 is judged. The effect is far
 larger than the decline it was aimed at (a newborn sleeps 25 per 1,000
 steps): in a barren world, food regrows anywhere, so a patrol that keeps
 going back to squares it hasn't seen for a while keeps finding it.
+
+### Hopeful trips with revisit 1/128 (seeds 101–140, reported only)
+
+`decline --revisit 0.0078125` ([decline-revisit.txt](decline-revisit.txt)),
+world 5 per 1,000 steps, experienced (E) against newborn (N), both with
+revisit:
+
+| | N | E | E − N |
+|---|---|---|---|
+| Sleeps | 4.40 | 2.71 | −1.69 [−1.96, −1.41] |
+| Meals | 69.0 | 71.9 | +2.85 [+2.33, +3.37] |
+| Hopeful trips | 198 | 203 | +5.2 [+0.4, +9.9] |
+| Meals at target | 15.3 | 16.4 | +1.11 [+0.35, +1.87] |
+| Meals en route | 16.2 | 16.5 | +0.33 [−0.38, +1.03] |
+| Meals off any trip | 37.6 | 39.0 | +1.41 [+0.62, +2.20] |
+
+Without revisit the experienced apprentice slept 28.4 and the newborn 25.0
+on these seeds. With revisit both sleep about a tenth as much, and **the
+decline reverses**: experience now helps (−33% sleeps against a newborn).
+Hopeful trips go from 6–19 to about 200 per 1,000 steps: it patrols.
