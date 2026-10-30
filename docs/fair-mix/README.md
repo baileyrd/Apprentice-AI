@@ -104,3 +104,61 @@ gate kept its odd barren shape: half the sleeps, three times the meals.
 
 Before judging, rule 2 looked likely, rule 1 likely to miss on bush
 sleeps, rule 3 likely to miss on bush sleeps, rule 4 met.
+
+## Results (seeds 1–100 and 111–210, one run)
+
+`cargo run --release --bin fair_mix -- --judge` prints the verdicts
+([judging.txt](judging.txt)) and writes [fair_mix.csv](fair_mix.csv).
+About 3.5 hours on 4 cores.
+
+| Rule | Result | Verdict |
+|---|---|---|
+| 1a. Bush sleeps, H vs A ≤ +10% | +46% [+33%, +59%] | **missed** |
+| 1b. Barren sleeps, H vs A ≤ +10% | −18% [−21%, −16%] | **met** |
+| 1c. Barren false hopes, H vs A ≤ +10% | +72% [+47%, +101%] | **missed** |
+| 1d. Home-test wrong (100 steps), H vs A ≤ +10% | −20% [−24%, −16%] | **met** |
+| 2. Barren false hopes, H vs C ≤ −50% | −56% [−65%, −44%] | **unclear** |
+| 3a. Bush sleeps, K vs A ≤ +10% | +126% [+103%, +151%] | **missed** |
+| 3b. Barren sleeps, K vs A ≤ +10% | −0% [−2%, +2%] | **met** |
+| 3c. Barren false hopes, K vs A ≤ +10% | −7% [−19%, +6%] | **met** |
+| 3d. Home-test wrong (100 steps), K vs A ≤ +10% | −0% [−6%, +6%] | **met** |
+| 4. Patterns taught in the bush world, K vs A ≤ −50% | −54% [−55%, −53%] | **met** |
+
+Means (A, C, H, E, K): bush sleeps 14.2, 12.8, 19.6, 19.4, 36.2; barren
+false hopes 1.7, 17.0, 4.0, 66.3, 2.0; barren sleeps 56.3, 25.9, 46.9,
+28.7, 56.6; barren meals 32.5, 104.3, 58.7, 97.1, 37.4; bush meals 279,
+282, 268, 267, 234; diary writes in the bush world 36,000, 6,344, 4,590.
+
+## What it shows
+
+- **The lead holds for false hopes.** A fair mix removes nearly all of
+  the budget's false hopes (66 → 2.0, default 1.7) and most of the gate's
+  (17 → 4.0). The network expects eaten squares to grow back when its
+  lessons tilt toward changes, by amount (a budget of surprises) or by
+  order (surprises taught last).
+- **But the tilt was also feeding it.** Today's gate has *fewer* bush
+  sleeps than the default (12.8 against 14.2), and fair mix takes that
+  away (19.6). A network that leans toward "it grows back" returns to
+  bushes sooner, which pays in a bush world and costs in a barren one.
+  Fair mix trades one for the other; it does not remove a mistake.
+- **The gate's odd barren life was mostly an age bug.** Confirmations
+  taught at their age group's start, not their own age, gave the gated
+  apprentice half the barren sleeps and three times the barren meals. With
+  their own age it lives close to the default there (sleeps −18%, meals
+  59 against 33), and keeps the gate's better home test (−20%).
+- **A budget starves the network of regrowth.** With a fair split, a
+  budget loses nothing in the barren world or the home test but more than
+  doubles bush sleeps (36 against 14). Fewer samples mean fewer regrowths
+  seen; tuning showed the share of changes is not the fix (half and half
+  did no better). The network learns at a fixed rate per sample, so
+  teaching less means learning slower.
+
+Neither the gate nor a network budget can go on yet. Defaults unchanged:
+`fair_mix` stays `false`. Kept regardless: the gate's confirmations are
+now kept in the order first seen, so gate runs are reproducible.
+
+What would let the gate go on is a network that learns "grows back" from
+regrowths without being told it more often than it happens: for example
+weighting each sample by how rare its outcome is, or a rate that rises
+with surprise. Both change how the network learns, not what sleep feeds
+it, and are not tried here.
