@@ -194,6 +194,12 @@ impl Net {
 
     /// Learns that `input` led to `target`.
     pub fn learn(&mut self, input: &[f64], target: &[f64]) {
+        self.learn_weighted(input, target, 1.0);
+    }
+
+    /// Learns that `input` led to `target`, at `weight` times its rate.
+    pub fn learn_weighted(&mut self, input: &[f64], target: &[f64], weight: f64) {
+        let rate = self.rate * weight;
         let mut x = self.sweep(input);
         let Learning::PredictiveCoding {
             rounds,
@@ -201,7 +207,7 @@ impl Net {
             precision,
         } = self.learning
         else {
-            return self.backprop(&x, target);
+            return self.backprop(&x, target, rate);
         };
         let top = x.len() - 1;
         x[top] = target.to_vec();
@@ -210,7 +216,7 @@ impl Net {
         }
         let errors = self.weighted_errors(&x, precision);
         for (l, link) in self.links.iter_mut().enumerate() {
-            link.learn(&activity(l, &x[l]), &errors[l], self.rate);
+            link.learn(&activity(l, &x[l]), &errors[l], rate);
         }
     }
 
@@ -253,13 +259,13 @@ impl Net {
 
     /// Gradient of the output error, passed down from the top, given the
     /// forward sweep `fed`.
-    fn backprop(&mut self, fed: &[Vec<f64>], target: &[f64]) {
+    fn backprop(&mut self, fed: &[Vec<f64>], target: &[f64], rate: f64) {
         let top = fed.len() - 1;
         let mut delta: Vec<f64> = target.iter().zip(&fed[top]).map(|(t, p)| t - p).collect();
         for l in (0..self.links.len()).rev() {
             let below = activity(l, &fed[l]);
             let down = self.links[l].carry(&delta);
-            self.links[l].learn(&below, &delta, self.rate);
+            self.links[l].learn(&below, &delta, rate);
             delta = down
                 .iter()
                 .zip(&fed[l])

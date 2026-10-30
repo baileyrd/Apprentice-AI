@@ -93,6 +93,10 @@ pub struct PatternNet {
     pub hidden: NonZeroUsize,
     pub rate: f64,
     pub seed: u64,
+    /// Rare outcomes teach harder, up to this many times the rate, and
+    /// answers are corrected back by the same weights; `None` teaches every
+    /// sample alike.
+    pub rare: Option<f64>,
 }
 
 impl Default for PatternNet {
@@ -102,6 +106,7 @@ impl Default for PatternNet {
             hidden: NonZeroUsize::new(64).unwrap_or(NonZeroUsize::MIN),
             rate: 0.2,
             seed: 0,
+            rare: None,
         }
     }
 }
@@ -152,6 +157,28 @@ pub struct Patterns {
     worded: HashMap<(Said, usize, usize), (Belief, u32)>,
     /// How far each voice's words are believed.
     trust: HashMap<Voice, f64>,
+    /// Outcomes seen per state, and the cap on a rare one's weight, if
+    /// rare outcomes teach harder.
+    outcomes: [[u32; KINDS]; STATES],
+    rare: Option<f64>,
+}
+
+/// How much rarer outcome `k` is than an even share of `seen`: between 1
+/// and `cap` (at least 1).
+fn rarity(seen: &[u32; KINDS], k: usize, cap: f64) -> f64 {
+    let even = f64::from(seen.iter().sum::<u32>()) / KINDS as f64;
+    (even / f64::from(seen[k].saturating_add(1))).clamp(1.0, cap.max(1.0))
+}
+
+/// `belief` with each outcome's share divided by its rarity, scaled to sum
+/// to 1: undoes what weighting rare outcomes does to a learned answer.
+fn corrected(belief: Belief, seen: &[u32; KINDS], cap: f64) -> Belief {
+    let b: Belief = std::array::from_fn(|k| belief[k] / rarity(seen, k, cap));
+    let sum: f64 = b.iter().sum();
+    if sum <= 0.0 {
+        return belief;
+    }
+    b.map(|p| p / sum)
 }
 
 /// Rate at which a settled disagreement moves trust in a voice. Faster than
@@ -181,6 +208,8 @@ impl Patterns {
             counts: [[0; AGES]; STATES],
             worded: HashMap::new(),
             trust: HashMap::new(),
+            outcomes: [[0; KINDS]; STATES],
+            rare: None,
         }
     }
 
@@ -196,6 +225,7 @@ impl Patterns {
                 NET_LEARNING,
                 net.seed,
             ))),
+            rare: net.rare,
             ..Self::new(rate, min)
         }
     }
@@ -222,7 +252,12 @@ impl Patterns {
                     belief[k] += self.rate * (target[k] - belief[k]);
                 }
             }
-            Store::Net(net) => net.learn(&features(last, age), &one_hot(sensed)),
+            Store::Net(net) => {
+                let seen = &mut self.outcomes[state];
+                let weight = self.rare.map_or(1.0, |cap| rarity(seen, kind(sensed), cap));
+                net.learn_weighted(&features(last, age), &one_hot(sensed), weight);
+                seen[kind(sensed)] = seen[kind(sensed)].saturating_add(1);
+            }
         }
         if let Some(said) = said {
             let slot = self
@@ -274,7 +309,11 @@ impl Patterns {
         }
         Some(match &self.general {
             Store::Table(table) => table[state][group],
-            Store::Net(net) => as_belief(&net.predict(&features(last, age))),
+            Store::Net(net) => {
+                let b = as_belief(&net.predict(&features(last, age)));
+                self.rare
+                    .map_or(b, |cap| corrected(b, &self.outcomes[state], cap))
+            }
         })
     }
 
@@ -295,6 +334,50 @@ mod tests {
             voice: Voice(voice),
             word: crate::body::Word(word),
         }
+    }
+
+    #[test]
+    fn rarity_weighs_outcomes_seen_less_than_an_even_share() {
+        let seen = [90, 0, 10, 0];
+        assert_eq!(rarity(&seen, 0, 8.0), 1.0);
+        assert!((rarity(&seen, 2, 8.0) - 25.0 / 11.0).abs() < 1e-12);
+        assert_eq!(rarity(&seen, 1, 8.0), 8.0);
+        assert_eq!(rarity(&seen, 1, 0.5), 1.0, "a cap below 1 never shrinks");
+        let back = corrected([0.5, 0.0, 0.5, 0.0], &seen, 8.0);
+        assert!(
+            (back[2] - (0.5 / rarity(&seen, 2, 8.0)) / (0.5 + 0.5 / rarity(&seen, 2, 8.0))).abs()
+                < 1e-12
+        );
+        assert!((back.iter().sum::<f64>() - 1.0).abs() < 1e-12);
+    }
+
+    /// Food chance a network says at age 40 after eaten squares regrow one
+    /// time in ten, last seen empty.
+    fn regrowth_learned(rare: Option<f64>) -> f64 {
+        let mut p = Patterns::with_net(
+            0.05,
+            1,
+            PatternNet {
+                rare,
+                ..net(64, 0.2)
+            },
+        );
+        for i in 0..400 {
+            let seen = if i % 10 == 5 { Cell::Food } else { Cell::Empty };
+            p.learn(Last::Ate, 40, None, seen);
+        }
+        p.predict(Last::Ate, 40, None)
+            .map_or(0.0, |b| b[kind(Cell::Food)])
+    }
+
+    #[test]
+    fn weighting_rare_outcomes_keeps_their_chance_honest() {
+        let (plain, weighted) = (regrowth_learned(None), regrowth_learned(Some(8.0)));
+        assert!(
+            (0.0..0.3).contains(&weighted),
+            "over-expects regrowth: {weighted}"
+        );
+        assert!((0.0..0.3).contains(&plain));
     }
 
     #[test]
@@ -355,6 +438,7 @@ mod tests {
             hidden: NonZeroUsize::new(hidden).expect("non-zero"),
             rate,
             seed: 1,
+            rare: None,
         }
     }
 

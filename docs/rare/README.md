@@ -66,3 +66,22 @@ My guess before running: rule 2 met; rule 1 unclear (the default already
 sees every regrowth); rule 3 unclear, since PR #24's gate cost in the bush
 world may not be only slow learning; rule 4 likely missed, as a budget
 gives the network fewer regrowths to learn from at any weight.
+
+## Tuning (seeds 101–110): stopped here, not judged
+
+Caps 2, 4 and 8. Rare-outcome weighting alone (R) wrecked the bush world
+at every cap: bush sleeps 7.0 → 40.7, 86.8, 47.4, bush meals 297 → 233,
+149, 219. It helped the barren world, more as the cap grew: at cap 8
+barren sleeps 56.2 → 13.2 and barren meals 36 → 131, with no false hopes.
+The gate (G) and budget (B) settings followed R. Rule 1 (bush sleeps
+−10%) could not be met by any cap, so the slice stopped before judging;
+`PatternNet::rare` stays `None`.
+
+Not yet understood. The correction divides every outcome by its rarity
+in *its state*, so in states where food is rare (seen empty, eaten) food
+is pushed down hard; that would explain fewer bush returns. Why the barren
+world improves so much is unchecked. A per-world look (`cargo run
+--release --example sequences`, seeds 1–40, default apprentice) also
+showed that bush worlds get easier with experience (sleeps per 1,000
+steps 8 → 4) while barren worlds get harder (22 → 29), which no rule
+measured.
