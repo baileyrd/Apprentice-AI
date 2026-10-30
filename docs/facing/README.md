@@ -514,3 +514,51 @@ Nano's last try on walking before the facing track stops (2026-10-30).
   201–210, disclosed.
 - **Stop rule (Nano's):** if it misses, the facing track stops, and this
   doc gets its final summary.
+
+### Results: missed
+
+Tuning on seeds 201–210 (rate only): 0.003 → 0.86, **0.01 → 0.87**,
+0.03 → 0.85 one-ahead (ungated e-prop at 0.01: 0.85).
+
+**Walking + ring, gated e-prop online, seeds 141–160: missed, 0/20.**
+
+| Learner | One-ahead | Two-ahead | After stares ≥ 5 | Place probe | Centre-direction probe | Seeds passing |
+|---------|-----------|-----------|------------------|-------------|------------------------|---------------|
+| Gated e-prop | 0.86 | 0.84 | 0.86 | 0.32 | 0.48 | 0/20 |
+
+Per-motor recurrent weights changed nothing measurable: same one-ahead as
+plain e-prop (0.85) and gated context units (0.86), and the centre-direction
+probe stays near 0.48 (GRU 0.90, no memory 0.39).
+
+## The facing track stops here (Nano's stop rule, 2026-10-30)
+
+| Stage | What it asks | Who passes |
+|-------|--------------|------------|
+| Turning | what each unlabelled motor does | every learner, no memory included |
+| Matching | heading, when two boxes look alike | no local learner; every learner once given an innate heading ring |
+| Walking (+ ring) | where it stands, kept across steps | only a GRU trained offline by BPTT (1.00); every online, local learner stops at 0.77–0.87 |
+
+What it showed:
+
+1. **Raw senses and unlabelled motors are not the hard part.** Motor
+   effects are learned from noisy, unlabelled input in a few thousand
+   steps.
+2. **Keeping a fact the percept doesn't carry is.** Each time the world
+   needed one (heading, then place), every local learner stopped at about
+   the same level, whatever memory it had: context units, recent history,
+   motor gating, e-prop, gated e-prop.
+3. **It is learnable.** A GRU with BPTT solves walking on every seed, and
+   it keeps place *egocentrically* ("where the centre lies from my
+   heading"), not on the compass.
+4. **What local learning missed here** is credit that flows through other
+   units over later steps, which is exactly what keeping and rotating that
+   egocentric place needs. Probe accuracy stays near 0.48 for every local
+   learner.
+5. **Method lessons:** probes must be frozen while scored (an online probe
+   leaks memory through its own weights); random looks need a minimum
+   distance; mark and seed discipline caught a world flaw and a false
+   "trace of heading" claim.
+
+Open, not built: an innate place sense (path integration of steps, like
+the ring), or a learning rule that carries credit across units over time
+while staying local.
