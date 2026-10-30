@@ -1,0 +1,59 @@
+# Revisit: a planner-side pull toward long-unseen squares
+
+## Why
+
+The decline diagnosis (docs/decline) found that a newborn beats an
+experienced apprentice in a new barren world by making three times as many
+hopeful trips, and that those trips pay mostly on the way (en-route meals
+are 47% of the meal gap, meals at the hoped-for square 11%). Experience
+takes the trips away. False hopes near zero are now a symptom, not a goal.
+
+The planner already has a pull toward squares not looked at for a while:
+curiosity × staleness, where staleness = min(1, volatility × steps
+unseen). Volatility, learned from how often squares change while unwatched,
+settles near 0.0003 after an upbringing, so a square has to go unseen for
+about 3,000 steps before the pull is felt. In practice the experienced
+apprentice has no reason to go back to a square it has seen.
+
+## What changes
+
+`Drives::revisit: f64`, default 0 (today's behaviour). Staleness grows at
+least this fast:
+
+    staleness = min(1, max(volatility, revisit) × steps unseen)
+
+So a square unseen for 1/revisit steps pulls like a square never seen. The
+pull is curiosity, not food: the apprentice goes to look, and eats what it
+finds on the way. Nothing tells it which world it is in. Clearing its
+memory of when it saw each square at a world's start would do that, so it
+is not an option.
+
+## Tuning (seeds 101–110 only)
+
+`revisit` from {1/64, 1/128, 1/256, 1/512}: the one with the fewest barren
+test sleeps whose bush test sleeps are no more than 10% above the default's.
+Only that value is judged.
+
+## Marks, fixed before judging
+
+Judged once on seeds 1–100 and 111–210, **R** (the tuned `revisit`) against
+**A** (today's default), paired by seed, 90% interval, `apprentice::judge`.
+Raw differences are reported next to percentages.
+
+1. **Fewer sleeps in a new barren world**: barren test sleeps per 1,000
+   steps, R vs A, at most −10%.
+2. **More meals there**: barren test meals per 1,000 steps, R vs A, at least
+   +10%.
+3. **Experience no longer makes barren worlds harder** (as in PR #26): R's
+   barren test sleeps per 1,000 steps against its first barren upbringing
+   world, at most 0%.
+4. **No regressions**, R vs A, each at most +10%: bush test sleeps, bush
+   upbringing sleeps, barren upbringing sleeps, home-test wrong answers at
+   100 steps.
+
+Reported only, never a mark: false hopes (barren and bush), hopeful trips
+with their at-target and en-route meals, bush meals.
+
+My guess before running: 2 met; 1 unclear; 3 missed (PR #26 suggests the
+decline has more than one part); 4 at risk on bush sleeps, since looking
+around costs steps in a world where the known bushes already feed it.
