@@ -150,3 +150,30 @@ seeds with colliding looks.)
   learn to use it within the budget.
 
 Run: `cargo run --release --bin facing -- --stage turning|matching --judge`.
+
+## Second try: motor-gated hidden weights (rules fixed before any run)
+
+Nano's fix: a separate set of hidden weights per motor, with the motor
+choosing which set applies; context units kept.
+
+- **Gated.** The input is laid out in one block per motor, each holding
+  [what it senses now, context units]. Only the fired motor's block is
+  filled; the others are zero. So each motor has its own first-layer
+  weights into the same 16 hidden units, and the output weights are
+  shared. The motor's one-hot is kept too, for a per-motor bias. Same
+  `Net`, same local learning, same rate scaling (by the active block).
+  Why it might work: the motor no longer has to be combined with the rest
+  by the hidden layer; it picks the weights, which takes one of the three
+  parity facts out of the learning.
+- **Same marks** as the matching row above: one-ahead ≥ 95%, two-ahead
+  ≥ 90%, after stares ≥ 5 ≥ 90%, 20,000 steps, ≥ 19 of 20 seeds.
+- **Fresh seeds.** Matching is judged once on seeds 41–60, all four
+  memories. Turning is re-run on seeds 21–40 with the 3-of-8 look rule, all
+  four memories. Tuning stays on 101–110.
+- **Probe on matching-box steps.** Also reported: probe accuracy on turns
+  that start facing a matching box (north or south in the matching
+  stage), where heading can't be read off the view. Chance there is about
+  50%.
+- **Stop rule (Nano's).** If gating misses matching, stop: merge the world
+  and the controls, and write up "memory isn't the bottleneck,
+  computation is."
