@@ -442,3 +442,49 @@ compass. For the local learners on seeds 81–100 that probe reads 0.37–0.49
 - **Marks** (same): one-ahead ≥ 95%, two-ahead ≥ 90%, after stares ≥ 5
   ≥ 90%, in ≥ 19 of 20 fresh seeds, **121–140**. Tuning (rate, hidden
   size, leak range) only on seeds 201–210, disclosed.
+
+### Step 2 results: missed
+
+Tuning on seeds 201–210 (400,000 steps each), disclosed:
+
+| Setting (units, leaks, rate) | One-ahead |
+|------------------------------|-----------|
+| 64, 0.5–0.95, 0.003          | 0.83      |
+| 64, 0.5–0.95, **0.01**       | 0.85      |
+| 64, 0.5–0.95, 0.03           | 0.76      |
+| 64, 0.0–0.9, 0.01            | 0.86      |
+| 64, 0.8–0.99, 0.01           | 0.79      |
+| 128, 0.5–0.95, 0.01          | 0.86      |
+
+The committed shape (64 units, leaks 0.5–0.95) was kept, with rate 0.01.
+Every setting plateaued around 0.85; at 40,000 steps it was 0.74.
+
+**Walking + ring, e-prop online, seeds 121–140: missed, 0/20.**
+
+| Learner | One-ahead | Two-ahead | After stares ≥ 5 | Place probe | Centre-direction probe | Seeds passing |
+|---------|-----------|-----------|------------------|-------------|------------------------|---------------|
+| E-prop  | 0.85      | 0.84      | 0.84             | 0.43        | 0.49                   | 0/20          |
+| GRU (step 1, for comparison) | 1.00 | 1.00 | 1.00   | 0.39        | 0.90                   | 20/20         |
+| Gated (seeds 81–100)         | 0.86 | 0.85 | 0.86   | 0.26        | 0.37                   | 0/20          |
+
+- **Between the two.** E-prop beats the earlier local learners' 0.77–0.79
+  and matches gated's 0.86, but stays far from the GRU's 1.00.
+- **It doesn't keep place.** Its centre-direction probe reads 0.49, against
+  0.90 for the GRU and 0.39 with no memory. Some trace, not a state it can
+  use.
+- **Likely why, not checked:** e-prop keeps only each weight's own
+  trace, and drops how a weight's change reaches the output through
+  *other* units over later steps. The GRU's solution looks like it needs
+  exactly that: hold "the centre is behind me" and rotate it with each
+  turn, a state carried and rewritten across units over many steps.
+  Leaky additive units also have no gate for "rewrite on a step forward,
+  hold otherwise".
+
+## Where this leaves it
+
+- Turning and matching with the ring are solved by every learner; walking
+  needs state, and only BPTT (offline, non-local) found it here.
+- Online local learning (context units, gating, e-prop) reaches about 0.86
+  and stops there.
+- The GRU's own answer is the useful clue: it keeps where it is
+  *relative to its heading*, not on the compass.
