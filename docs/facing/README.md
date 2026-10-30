@@ -243,3 +243,57 @@ own state, updated by the motor (path integration on a ring), so that
 prediction needs only heading × motor, which every learner here already
 solves. That would be giving the apprentice a heading sense, a design
 choice for Nano, like the offset it already gets in the grid world.
+
+## Third try: an innate heading ring (rules fixed before any run)
+
+Nano's choice (2026-10-30): give the apprentice heading as an innate sense,
+not something it must learn to keep.
+
+- **The ring.** Four input units, one active. The active unit shifts by
+  one each time the body really turns, one way for left and the other for
+  right; it doesn't move on stills (or, in walking, on steps forward).
+  It is unlabelled: per seed, the unit that is active facing north is
+  random, and so is which way round the ring runs. The motor→turn mapping
+  is still shuffled per seed, so which motor moves the ring which way is
+  still learned. Like a vestibular sense, it reports the turn that
+  happened, not the motor fired.
+- **Learners.** Every memory from before (none, recent 3, context, gated)
+  now also gets the ring as input. The probe still reads heading off the
+  hidden layer.
+- **Matching, again:** same marks (20,000 steps; one-ahead ≥ 95%,
+  two-ahead ≥ 90%, after stares ≥ 5 ≥ 90%; ≥ 19 of 20 seeds), judged once
+  on fresh seeds 61–80. Expected: all four pass, no memory included,
+  because with the ring the next view is a two-way combination (ring and
+  motor), like turning. The 80% no-memory ceiling no longer applies: the
+  ring gives heading by design.
+
+### Stage 3: walking (rules fixed before any run)
+
+- **World.** The matching world (north and south alike), plus a fourth
+  motor, *forward*, shuffled in with the others. The centre box gets its
+  own look, and beyond the plus is dark (all zeros, plus the usual noise).
+  - From the centre, forward steps into the box it faces.
+  - From a side box, it faces the centre box when facing back the way it
+    came, and dark the other three ways. Forward toward the centre steps
+    back into it; forward into the dark does nothing.
+  - Turning and the ring work as before; forward doesn't turn it.
+- **Life.** Stares as before, then a random one of left, right, forward.
+  Every step that isn't a stare is scored.
+- **Learners.** All four memories, each with the ring.
+- **Marks.** One-ahead ≥ 95%, two-ahead ≥ 90%, after stares ≥ 5 ≥ 90%
+  (all over the last 100 scored steps, the long-stare one over the second
+  half), ≥ 19 of 20 seeds, 40,000 steps. Tuning on 101–110; judged once on
+  seeds 81–100.
+- **Expected:** no memory fails. In a side box facing dark, the ring says
+  where it faces but not which side box it is in, so whether a turn shows
+  the centre or more dark depends on the heading it had when it stepped
+  in: memory across steps again. Whether recent 3 or context can carry
+  it is the question.
+
+### Two checks Nano asked for
+
+- **"Lingers near one of the pair."** For the no-memory probe at 0.64 on
+  matching-box turns: the share of the more common of north and south in
+  those same turns is recorded per seed. If its median is close to 0.64,
+  the explanation holds.
+- **Gated probe at 0.49.** Noted in the results below.
