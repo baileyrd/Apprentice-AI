@@ -9,6 +9,7 @@ pub mod apprentice;
 pub mod body;
 pub mod experiment;
 pub mod facing;
+pub mod gru;
 pub mod home;
 pub mod judge;
 pub mod lessons;

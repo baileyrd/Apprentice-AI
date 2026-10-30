@@ -11,6 +11,7 @@
 //!
 //! Separate from the grid world: nothing here touches the main apprentice.
 
+use crate::gru::{Gru, Sample, Training};
 use crate::network::{Learning, Net, NetError};
 use crate::rng::Rng;
 
@@ -405,15 +406,16 @@ impl Learner {
 /// learner never sees it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Probe {
-    /// One row per class: weights, then bias.
-    rows: Vec<[f64; HIDDEN + 1]>,
+    /// One row per class: a weight per hidden unit, then bias.
+    rows: Vec<Vec<f64>>,
     rate: f64,
 }
 
 impl Probe {
-    pub fn new(classes: usize, rate: f64) -> Self {
+    /// A probe for `classes` classes, reading `width` hidden units.
+    pub fn new(classes: usize, width: usize, rate: f64) -> Self {
         Self {
-            rows: vec![[0.0; HIDDEN + 1]; classes],
+            rows: vec![vec![0.0; width + 1]; classes],
             rate,
         }
     }
@@ -431,17 +433,21 @@ impl Probe {
         let scores = self.scores(hidden);
         for (c, row) in self.rows.iter_mut().enumerate() {
             let e = if c == class { 1.0 } else { 0.0 } - scores[c];
+            let width = row.len() - 1;
             for (w, a) in row.iter_mut().zip(hidden) {
                 *w += self.rate * e * a;
             }
-            row[HIDDEN] += self.rate * e;
+            row[width] += self.rate * e;
         }
     }
 
     fn scores(&self, hidden: &[f64]) -> Vec<f64> {
         self.rows
             .iter()
-            .map(|row| row[HIDDEN] + row.iter().zip(hidden).map(|(w, a)| w * a).sum::<f64>())
+            .map(|row| {
+                let (weights, bias) = row.split_at(row.len() - 1);
+                bias[0] + weights.iter().zip(hidden).map(|(w, a)| w * a).sum::<f64>()
+            })
             .collect()
     }
 }
@@ -505,7 +511,8 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
         seed ^ 0x5eed,
     )?;
     let mut driver = Driver::new(&world, seed ^ 0xd21e);
-    let (mut probe, mut place_probe) = (Probe::new(SIDES, 0.02), Probe::new(SIDES + 1, 0.02));
+    let mut probe = Probe::new(SIDES, HIDDEN, 0.02);
+    let mut place_probe = Probe::new(SIDES + 1, HIDDEN, 0.02);
     let mut places = vec![];
     let (mut ones, mut twos, mut probes, mut long) = (vec![], vec![], vec![], vec![]);
     let (mut probes_matching, mut headings_matching) = (vec![], vec![]);
@@ -570,6 +577,96 @@ fn majority(values: &[usize], window: usize) -> Option<f64> {
         .map(|v| tail.iter().filter(|&&x| x == v).count())
         .max()?;
     (!tail.is_empty()).then(|| most as f64 / tail.len() as f64)
+}
+
+/// The GRU ceiling check's settings (see `docs/facing/README.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Ceiling {
+    pub stage: Stage,
+    /// Steps of the recorded life it trains on.
+    pub steps: usize,
+    /// Steps after training, frozen, that are scored.
+    pub eval: usize,
+    pub hidden: usize,
+    pub training: Training,
+    /// Scored steps at the end over which accuracy is scored.
+    pub window: usize,
+}
+
+/// Records a life with the ring, trains a GRU on it offline by BPTT, then
+/// scores it frozen on the steps that follow. Only `one`, `two`,
+/// `after_stare` and `probe_place` are filled.
+pub fn ceiling(c: &Ceiling, seed: u64) -> Score {
+    let mut world = World::new(c.stage, seed);
+    let n = world.motors();
+    let mut driver = Driver::new(&world, seed ^ 0xd21e);
+    let input = |p: &[f64], m: usize| -> Vec<f64> {
+        let mut x = p.to_vec();
+        x.extend(one_hot(m, n));
+        x
+    };
+    let mut life = Vec::with_capacity(c.steps);
+    let mut places = Vec::with_capacity(c.steps);
+    let mut percept = world.percept(true);
+    for _ in 0..c.steps {
+        let (motor, _) = driver.drive();
+        places.push(place(world.at()));
+        world.fire(motor);
+        let next = world.percept(true);
+        life.push(Sample {
+            input: input(&percept, motor),
+            target: next.clone(),
+        });
+        percept = next;
+    }
+    let mut gru = Gru::new(percept.len() + n, c.hidden, percept.len(), seed ^ 0x5eed);
+    gru.train(&life, &c.training);
+
+    let mut place_probe = Probe::new(SIDES + 1, c.hidden, 0.02);
+    let mut h = gru.rest();
+    for (sample, &at) in life.iter().zip(&places) {
+        h = gru.step(&h, &sample.input).0;
+        place_probe.learn(&h, at);
+    }
+
+    let (mut ones, mut twos, mut long, mut placed) = (vec![], vec![], vec![], vec![]);
+    let mut now = driver.drive();
+    let mut two_ahead: Option<usize> = None;
+    for _ in 0..c.eval {
+        let after = driver.drive();
+        let (motor, stared) = now;
+        let (h1, one) = gru.step(&h, &input(&percept, motor));
+        let two = gru.step(&h1, &input(&one, after.0)).1;
+        let stands = place(world.at());
+        world.fire(motor);
+        let next = world.percept(true);
+        let truth = world.faced();
+        let looks = world.looks();
+        if let Some(stared) = stared {
+            let hit = nearest(looks, &one) == truth;
+            ones.push(hit);
+            placed.push(place_probe.read(&h1) == stands);
+            if stared >= LONG_STARE {
+                long.push(hit);
+            }
+            if let Some(guess) = two_ahead {
+                twos.push(guess == truth);
+            }
+        }
+        two_ahead = after.1.map(|_| nearest(looks, &two));
+        h = h1;
+        percept = next;
+        now = after;
+    }
+    Score {
+        one: tail_rate(&ones, c.window),
+        two: tail_rate(&twos, c.window),
+        after_stare: tail_rate(&long, long.len()),
+        probe: None,
+        probe_matching: None,
+        majority_matching: None,
+        probe_place: tail_rate(&placed, c.window),
+    }
 }
 
 /// Look id whose pattern is closest to `v`.
@@ -805,7 +902,7 @@ mod tests {
 
     #[test]
     fn probe_learns_a_separable_heading() {
-        let mut p = Probe::new(SIDES, 0.05);
+        let mut p = Probe::new(SIDES, HIDDEN, 0.05);
         let code = |h: usize| -> Vec<f64> { (0..HIDDEN).map(|i| f64::from(i % 4 == h)).collect() };
         for t in 0..400 {
             p.learn(&code(t % 4), t % 4);
