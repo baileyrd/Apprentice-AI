@@ -25,6 +25,7 @@ struct Look {
     volatility: f64,
     maps: f64,
     prior_food: f64,
+    expect: [f64; 3],
 }
 
 fn world(mind: &mut Learner, config: Config, seed: u64) -> Look {
@@ -33,7 +34,10 @@ fn world(mind: &mut Learner, config: Config, seed: u64) -> Look {
     let mut seen: HashSet<_> = HashSet::new();
     for t in 0..1_000 {
         if t == 500 {
-            let far = apprentice::world::Pos { x: 10_000, y: 10_000 };
+            let far = apprentice::world::Pos {
+                x: 10_000,
+                y: 10_000,
+            };
             l.prior_food = mind.model().explain(far).0[2];
         }
         let obs = sim.observe();
@@ -53,6 +57,10 @@ fn world(mind: &mut Learner, config: Config, seed: u64) -> Look {
         }
     }
     l.squares = seen.len() as f64;
+    for (k, age) in [50u64, 200, 800].into_iter().enumerate() {
+        let saw_empty = apprentice::patterns::Last::Saw(Cell::Empty);
+        l.expect[k] = mind.model().expects(saw_empty, age).map_or(-1.0, |b| b[2]);
+    }
     l.volatility = mind.volatility();
     l.maps = mind.model().contexts() as f64;
     l
@@ -71,7 +79,16 @@ fn sequence(seed: u64) -> Vec<Look> {
 
 fn recall() -> Recall {
     let off = std::env::args().any(|a| a == "--no-patterns");
-    Recall { patterns: !off, ..Recall::default() }
+    let unseen = std::env::args().any(|a| a == "--unseen");
+    let net = apprentice::patterns::PatternNet {
+        unseen,
+        ..Default::default()
+    };
+    Recall {
+        patterns: !off,
+        pattern_net: Some(net),
+        ..Recall::default()
+    }
 }
 
 /// A newborn in the same five worlds, each world on its own.
@@ -88,25 +105,46 @@ fn newborns(seed: u64) -> Vec<Look> {
 
 fn main() {
     let fresh = std::env::args().any(|a| a == "--newborn");
-    let seeds: Vec<u64> = (101..=140).collect();
+    let seeds: Vec<u64> = (101..=110).collect();
     let all: Vec<Vec<Look>> = thread::scope(|s| {
         let hs: Vec<_> = seeds
             .chunks(10)
-            .map(|p| s.spawn(move || p.iter().map(|&sd| if fresh { newborns(sd) } else { sequence(sd) }).collect::<Vec<_>>()))
+            .map(|p| {
+                s.spawn(move || {
+                    p.iter()
+                        .map(|&sd| if fresh { newborns(sd) } else { sequence(sd) })
+                        .collect::<Vec<_>>()
+                })
+            })
             .collect();
-        hs.into_iter().flat_map(|h| h.join().expect("join")).collect()
+        hs.into_iter()
+            .flat_map(|h| h.join().expect("join"))
+            .collect()
     });
     let n = all.len() as f64;
-    println!("world kind sleeps meals rests eat_nothing bumps hurts squares food_in_view volatility maps prior_food(t500)");
+    println!(
+        "world kind sleeps meals rests eat_nothing bumps hurts squares food_in_view volatility maps prior_food(t500)"
+    );
     for w in 0..5 {
         let m = |f: fn(&Look) -> f64| all.iter().map(|v| f(&v[w])).sum::<f64>() / n;
         println!(
-            "{} {} {:.1} {:.1} {:.0} {:.0} {:.0} {:.1} {:.1} {:.0} {:.4} {:.1} {:.3}",
+            "{} {} {:.1} {:.1} {:.0} {:.0} {:.0} {:.1} {:.1} {:.0} {:.4} {:.1} {:.3} {:.3}/{:.3}/{:.3}",
             w + 1,
             if w % 2 == 0 { "barren" } else { "bush" },
-            m(|l| l.sleeps), m(|l| l.meals), m(|l| l.rests), m(|l| l.eat_nothing),
-            m(|l| l.bumps), m(|l| l.hurts), m(|l| l.squares), m(|l| l.food_in_view),
-            m(|l| l.volatility), m(|l| l.maps), m(|l| l.prior_food)
+            m(|l| l.sleeps),
+            m(|l| l.meals),
+            m(|l| l.rests),
+            m(|l| l.eat_nothing),
+            m(|l| l.bumps),
+            m(|l| l.hurts),
+            m(|l| l.squares),
+            m(|l| l.food_in_view),
+            m(|l| l.volatility),
+            m(|l| l.maps),
+            m(|l| l.prior_food),
+            m(|l| l.expect[0]),
+            m(|l| l.expect[1]),
+            m(|l| l.expect[2])
         );
     }
 }

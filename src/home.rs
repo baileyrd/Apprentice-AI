@@ -73,8 +73,13 @@ pub fn newborn(seed: u64) -> Result<(Learner, Sim), SimError> {
 
 /// The same, with memory set by `recall`.
 pub fn newborn_with(recall: Recall, seed: u64) -> Result<(Learner, Sim), SimError> {
+    newborn_as(recall, Drives::default(), seed)
+}
+
+/// The same, with memory set by `recall` and wants by `drives`.
+pub fn newborn_as(recall: Recall, drives: Drives, seed: u64) -> Result<(Learner, Sim), SimError> {
     let memory = Memory::new(Rates::default(), recall);
-    let mind = Apprentice::with_model(Drives::default(), memory, seed);
+    let mind = Apprentice::with_model(drives, memory, seed);
     Ok((mind, Sim::new(config(), seed)?))
 }
 
@@ -85,7 +90,16 @@ pub fn at_home(seed: u64) -> Result<(Learner, Sim, Option<usize>), SimError> {
 
 /// The same, with memory set by `recall`.
 pub fn at_home_with(recall: Recall, seed: u64) -> Result<(Learner, Sim, Option<usize>), SimError> {
-    let (mut mind, mut sim) = newborn_with(recall, seed)?;
+    at_home_as(recall, Drives::default(), seed)
+}
+
+/// The same, with memory set by `recall` and wants by `drives`.
+pub fn at_home_as(
+    recall: Recall,
+    drives: Drives,
+    seed: u64,
+) -> Result<(Learner, Sim, Option<usize>), SimError> {
+    let (mut mind, mut sim) = newborn_as(recall, drives, seed)?;
     for _ in 0..HOME_STEPS {
         step(&mut sim, &mut mind);
     }
