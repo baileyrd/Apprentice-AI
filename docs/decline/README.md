@@ -75,7 +75,17 @@ My guess before running: P carries most of it. Patterns are the only part
 taught in every world of the life, so they average bush and barren
 regrowth, and the bush worlds teach "eaten squares come back".
 
-## Results (seeds 101–140, one run)
+## Follow-up (Nano, 2026-10-30), fixed before its run
+
+- Each arm's own mean now carries a 90% interval (`Interval::mean`).
+- **PV**: patterns and own values wiped together; maps kept. Read by the
+  same rules: it carries the decline if it closes at least half the gap and
+  its raw-difference interval against N contains 0.
+
+The seeds are the same (101–140), so the first run's arms are rerun
+unchanged and must reproduce its numbers.
+
+## Results (seeds 101–140, first run)
 
 `cargo run --release --bin decline` prints [results.txt](results.txt) and
 writes [decline.csv](decline.csv).

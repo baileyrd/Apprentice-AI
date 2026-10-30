@@ -19,9 +19,9 @@ const USAGE: &str = "\
 usage: decline [--seeds N] [--from SEED] [--out DIR]
 
 Seeds FROM..FROM+N-1 (default 101..140, tuning seeds). Lives world 5 of a
-barren-first life six ways (E experienced, P patterns wiped, M maps wiped,
-V own values wiped, F all three wiped, N newborn), prints each arm against
-the newborn and writes DIR/decline.csv (default DIR: runs/decline).";
+barren-first life seven ways (E experienced, P patterns wiped, M maps
+wiped, V own values wiped, PV patterns and values wiped, F all three wiped,
+N newborn), prints each arm against the newborn and writes DIR/decline.csv (default DIR: runs/decline).";
 
 type Error = Box<dyn std::error::Error>;
 
@@ -32,15 +32,17 @@ enum Arm {
     Patterns,
     Maps,
     Values,
+    PatternsValues,
     Full,
     Newborn,
 }
 
-const ARMS: [Arm; 6] = [
+const ARMS: [Arm; 7] = [
     Arm::Experienced,
     Arm::Patterns,
     Arm::Maps,
     Arm::Values,
+    Arm::PatternsValues,
     Arm::Full,
     Arm::Newborn,
 ];
@@ -52,6 +54,7 @@ impl Arm {
             Arm::Patterns => "P",
             Arm::Maps => "M",
             Arm::Values => "V",
+            Arm::PatternsValues => "PV",
             Arm::Full => "F",
             Arm::Newborn => "N",
         }
@@ -96,13 +99,13 @@ fn world_five(seed: u64, arm: Arm) -> Result<Stay, Error> {
         return Ok(barren_test(&mut mind, seed)?);
     }
     let (mut mind, _) = raise(setting, seed, &barren())?;
-    if matches!(arm, Arm::Patterns | Arm::Full) {
+    if matches!(arm, Arm::Patterns | Arm::PatternsValues | Arm::Full) {
         mind.model_mut().forget_patterns();
     }
     if matches!(arm, Arm::Maps | Arm::Full) {
         mind.model_mut().forget_maps(Rates::default());
     }
-    if matches!(arm, Arm::Values | Arm::Full) {
+    if matches!(arm, Arm::Values | Arm::PatternsValues | Arm::Full) {
         mind.forget_values();
     }
     Ok(barren_test(&mut mind, seed)?)
@@ -174,17 +177,24 @@ fn report(rows: &[Row], measure: Measure) -> Result<(), Error> {
     let newborn_at = ARMS.len() - 1;
     let newborn = column(rows, newborn_at, f);
     let gap = mean(&column(rows, 0, f)) - mean(&newborn);
-    println!("{name} (newborn {:.2}):", mean(&newborn));
+    let own = Interval::mean(&newborn)?;
+    println!(
+        "{name} (newborn {:.2} [{:.2}, {:.2}]):",
+        own.mid, own.lo, own.hi
+    );
     for (i, arm) in ARMS.iter().enumerate().take(newborn_at) {
         let xs = column(rows, i, f);
         let change = Interval::change(&newborn, &xs)?;
         let diffs: Vec<f64> = xs.iter().zip(&newborn).map(|(x, n)| x - n).collect();
         let raw = Interval::mean(&diffs)?;
         let closed = (mean(&column(rows, 0, f)) - mean(&xs)) / gap;
+        let own = Interval::mean(&xs)?;
         println!(
-            "   {} {:.2}: {:+.0}% [{:+.0}%, {:+.0}%], raw {:+.2} [{:+.2}, {:+.2}], gap closed {:.0}%",
+            "   {} {:.2} [{:.2}, {:.2}]: {:+.0}% [{:+.0}%, {:+.0}%], raw {:+.2} [{:+.2}, {:+.2}], gap closed {:.0}%",
             arm.name(),
-            mean(&xs),
+            own.mid,
+            own.lo,
+            own.hi,
             100.0 * change.mid,
             100.0 * change.lo,
             100.0 * change.hi,
