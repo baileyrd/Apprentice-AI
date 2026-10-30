@@ -37,6 +37,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
         hidden: NonZeroUsize::new(64).ok_or("64 is not zero")?,
         rate: 0.2,
         seed: 0,
+        rare: None,
     };
     let mut out = PathBuf::from("runs/patterns-net");
     let mut it = args.iter();

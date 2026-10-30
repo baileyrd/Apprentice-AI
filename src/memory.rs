@@ -103,6 +103,11 @@ pub struct Recall {
     /// How sleep teaches the patterns' network; `None` teaches it every
     /// diary entry.
     pub net_replay: Option<NetReplay>,
+    /// Keeps what sleep teaches the patterns fair: samples spread evenly
+    /// through the sleep, confirmations taught at their own age, and a
+    /// network budget split between changes and non-changes in the day's
+    /// proportions.
+    pub fair_mix: bool,
 }
 
 /// Selective sleep for the patterns: today's most "surprising" entries,
@@ -175,6 +180,7 @@ impl Default for Recall {
             pattern_net: Some(PatternNet::default()),
             replay_budget: None,
             net_replay: None,
+            fair_mix: false,
         }
     }
 }
@@ -220,12 +226,61 @@ pub enum Source {
 type Sighting = (Pos, Cell, Option<(Last, u64, Option<Said>)>, f64);
 
 /// A sighting that confirmed a pattern: the square's state, the start of
-/// its age group, any word said, and what was seen.
+/// its age group (with fair mix, its age), any word said, and what was seen.
 type Confirmation = (Last, u64, Option<Said>, Cell);
 
 /// What a pattern learns from: a square's state, its age, any word said,
 /// and what was seen.
 type Sample = (Last, u64, Option<Said>, Cell);
+
+/// What a diary entry teaches the patterns; `None` for a square never seen.
+fn sample(e: &Sighting) -> Option<Sample> {
+    e.2.map(|(last, age, said)| (last, age, said, e.1))
+}
+
+/// Whether an entry saw its square change from how it last looked.
+fn changed(e: &Sighting) -> bool {
+    e.2.is_some_and(|(last, _, _)| last.looks() != e.1)
+}
+
+/// Like [`chosen`], with the budget split between changes and non-changes
+/// in `diary`'s own proportions (rounded), each taking its most
+/// "surprising".
+fn chosen_fairly(diary: &[Sighting], budget: Option<usize>) -> Vec<bool> {
+    let Some(budget) = budget.filter(|&b| b < diary.len()) else {
+        return vec![true; diary.len()];
+    };
+    let (moved, still): (Vec<usize>, Vec<usize>) =
+        (0..diary.len()).partition(|&i| changed(&diary[i]));
+    let share = (budget * moved.len() + diary.len() / 2) / diary.len();
+    let mut pick = vec![false; diary.len()];
+    for (idx, b) in [(moved, share), (still, budget - share)] {
+        let part: Vec<Sighting> = idx.iter().map(|&i| diary[i]).collect();
+        for (&i, &c) in idx.iter().zip(&chosen(&part, Some(b))) {
+            pick[i] = c;
+        }
+    }
+    pick
+}
+
+/// Interleaves `groups` evenly through one sequence: item `j` of a group of
+/// `n` sits at `(j + 0.5) / n`, ties in group order. Each group keeps its
+/// own order.
+fn spread(groups: Vec<Vec<Sample>>) -> Vec<Sample> {
+    let mut placed: Vec<(f64, usize, Sample)> = groups
+        .into_iter()
+        .enumerate()
+        .flat_map(|(g, items)| {
+            let n = items.len() as f64;
+            items
+                .into_iter()
+                .enumerate()
+                .map(move |(j, s)| ((j as f64 + 0.5) / n, g, s))
+        })
+        .collect();
+    placed.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+    placed.into_iter().map(|p| p.2).collect()
+}
 
 /// Which of `diary` sleep replays: all without a budget, else the `budget`
 /// most "surprising", ties going to the most recent.
@@ -308,9 +363,10 @@ pub struct Memory {
     working: Vec<(Pos, Belief)>,
     /// Known squares seen as expected since the last sleep, not written.
     confirmed: HashSet<Pos>,
-    /// Those sightings counted by the pattern they confirm: state, age
-    /// group, word, and what was seen.
-    tally: HashMap<Confirmation, u32>,
+    /// Those sightings counted by the pattern they confirm: state, age group
+    /// (with fair mix, age), word, and what was seen, in the order first
+    /// seen.
+    tally: Vec<(Confirmation, u32)>,
     /// Pattern samples kept from earlier sleeps for rehearsal, and how many
     /// have been offered.
     kept: Vec<Sample>,
@@ -345,7 +401,7 @@ impl Memory {
             },
             working: Vec::new(),
             confirmed: HashSet::new(),
-            tally: HashMap::new(),
+            tally: Vec::new(),
             kept: Vec::new(),
             offered: 0,
             traffic: Traffic::default(),
@@ -504,13 +560,6 @@ impl Memory {
         let elapsed = (self.t - self.last_sleep) as f64;
         let (d, m) = self.settled();
         if self.recall.patterns {
-            // Confirmations first, so today's surprises stay the most recent.
-            let tallied: Vec<(Sample, u32)> = self.tally.iter().map(|(&c, &n)| (c, n)).collect();
-            for (sample, n) in tallied {
-                for _ in 0..n {
-                    self.teach(sample);
-                }
-            }
             self.teach_patterns(d);
         }
         let ctx = &mut self.contexts[self.active];
@@ -558,38 +607,58 @@ impl Memory {
         self.traffic.taught += 1;
     }
 
-    /// Teaches the patterns from the first `d` diary entries: all of them,
-    /// or with `net_replay` a rehearsal of kept samples, then the most
-    /// "surprising" of today's. Keeps some of today's for later.
+    /// Teaches the patterns the day's confirmations and the first `d` diary
+    /// entries: all of them, or with `net_replay` a rehearsal of kept
+    /// samples and a budget of today's. Without `fair_mix`, confirmations
+    /// come first and today's entries last; with it, all are spread evenly.
+    /// Keeps some of today's for later.
     fn teach_patterns(&mut self, d: usize) {
         let today: Vec<Sighting> = self.diary[..d]
             .iter()
             .filter(|e| e.2.is_some())
             .copied()
             .collect();
-        let sample = |e: &Sighting| e.2.map(|(last, age, said)| (last, age, said, e.1));
-        let Some(r) = self.recall.net_replay else {
-            for s in today.iter().filter_map(sample) {
-                self.teach(s);
-            }
-            return;
+        let replay = self.recall.net_replay;
+        let rehearsed: Vec<Sample> = replay.map_or_else(Vec::new, |r| self.rehearsal(r.rehearsal));
+        let budget = replay.map(|r| r.budget);
+        let pick = if self.recall.fair_mix {
+            chosen_fairly(&today, budget)
+        } else {
+            chosen(&today, budget)
         };
-        let n = self.kept.len();
-        let rehearsed: Vec<Sample> = (0..r.rehearsal.min(n))
-            .map(|k| self.kept[k * n / r.rehearsal.min(n)])
+        let taught: Vec<Sample> = today
+            .iter()
+            .zip(&pick)
+            .filter(|(_, c)| **c)
+            .filter_map(|(e, _)| sample(e))
             .collect();
-        for s in rehearsed {
+        let mut groups: Vec<Vec<Sample>> = self
+            .tally
+            .iter()
+            .map(|&(c, n)| vec![c; n as usize])
+            .collect();
+        groups.push(rehearsed);
+        groups.push(taught);
+        let order = if self.recall.fair_mix {
+            spread(groups)
+        } else {
+            groups.concat()
+        };
+        for s in order {
             self.teach(s);
         }
-        let chosen = chosen(&today, Some(r.budget));
-        for (e, _) in today.iter().zip(&chosen).filter(|(_, c)| **c) {
-            if let Some(s) = sample(e) {
-                self.teach(s);
+        if replay.is_some() {
+            for s in today.iter().step_by(KEEP_EVERY).filter_map(sample) {
+                self.keep(s);
             }
         }
-        for s in today.iter().step_by(KEEP_EVERY).filter_map(sample) {
-            self.keep(s);
-        }
+    }
+
+    /// `count` kept samples, spread evenly over the store.
+    fn rehearsal(&self, count: usize) -> Vec<Sample> {
+        let n = self.kept.len();
+        let count = count.min(n);
+        (0..count).map(|k| self.kept[k * n / count]).collect()
     }
 
     /// Keeps `sample` for rehearsal, in place of the oldest once full.
@@ -714,8 +783,19 @@ impl WorldModel for Memory {
         } else {
             self.confirmed.insert(at);
             if let Some(s) = before {
-                let key = (s.last, group_start(t - s.since), s.said, sensed);
-                *self.tally.entry(key).or_insert(0) += 1;
+                // Fair mix teaches a confirmation at its own age, not its
+                // age group's start, as the diary's entries are taught.
+                let age = t - s.since;
+                let age = if self.recall.fair_mix {
+                    age
+                } else {
+                    group_start(age)
+                };
+                let key = (s.last, age, s.said, sensed);
+                match self.tally.iter_mut().find(|(k, _)| *k == key) {
+                    Some((_, n)) => *n += 1,
+                    None => self.tally.push((key, 1)),
+                }
             }
         }
         let next = match before {
@@ -1238,6 +1318,33 @@ mod tests {
         assert_eq!(chosen(&diary, Some(2)), [false, false, true, true]);
         assert_eq!(chosen(&diary, None), [true; 4]);
         assert_eq!(chosen(&diary, Some(9)), [true; 4]);
+    }
+
+    #[test]
+    fn spread_interleaves_groups_evenly_keeping_their_order() {
+        let s = |n: u64| (Last::Ate, n, None, Cell::Empty);
+        let order = spread(vec![vec![s(1), s(2)], vec![], vec![s(3), s(4), s(5), s(6)]]);
+        let ages: Vec<u64> = order.iter().map(|x| x.1).collect();
+        assert_eq!(ages, [3, 1, 4, 5, 2, 6]);
+    }
+
+    #[test]
+    fn a_fair_budget_keeps_the_days_share_of_changes() {
+        let entry = |x: i32, seen: Cell, e: f64| {
+            let at = Pos { x, y: 0 };
+            (at, seen, Some((Last::Ate, 40, None)), e)
+        };
+        // One change in four; the three non-changes are the most surprising.
+        let diary = [
+            entry(0, Cell::Food, 0.1),
+            entry(1, Cell::Empty, 0.9),
+            entry(2, Cell::Empty, 0.8),
+            entry(3, Cell::Empty, 0.7),
+        ];
+        assert_eq!(chosen(&diary, Some(2)), [false, true, true, false]);
+        assert_eq!(chosen_fairly(&diary, Some(2)), [true, true, false, false]);
+        assert_eq!(chosen_fairly(&diary, Some(3)), [true, true, true, false]);
+        assert_eq!(chosen_fairly(&diary, None), [true; 4]);
     }
 
     #[test]

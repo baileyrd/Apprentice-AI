@@ -214,18 +214,29 @@ pub fn lives(
     base: Recall,
     test: Recall,
 ) -> Result<Vec<(u64, Life, Life)>, LivesError> {
+    let all = lives_under(seeds, &[base, test])?;
+    Ok(all
+        .into_iter()
+        .map(|(seed, l)| (seed, l[0], l[1]))
+        .collect())
+}
+
+/// Lives every seed under each of `settings`, spread over the machine's
+/// cores, in seed order; each seed's lives in the order of `settings`.
+pub fn lives_under(
+    seeds: &[u64],
+    settings: &[Recall],
+) -> Result<Vec<(u64, Vec<Life>)>, LivesError> {
     let workers = thread::available_parallelism().map_or(1, |n| n.get());
     let chunk = seeds.len().div_ceil(workers).max(1);
+    let one = |seed: u64| -> Result<(u64, Vec<Life>), LivesError> {
+        let each: Result<Vec<Life>, SimError> = settings.iter().map(|&r| life(r, seed)).collect();
+        Ok((seed, each?))
+    };
     let results: Vec<Result<Vec<_>, LivesError>> = thread::scope(|scope| {
         let handles: Vec<_> = seeds
             .chunks(chunk)
-            .map(|part| {
-                scope.spawn(move || {
-                    part.iter()
-                        .map(|&seed| Ok((seed, life(base, seed)?, life(test, seed)?)))
-                        .collect()
-                })
-            })
+            .map(|part| scope.spawn(move || part.iter().map(|&seed| one(seed)).collect()))
             .collect();
         handles
             .into_iter()

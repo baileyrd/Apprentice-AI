@@ -1,0 +1,24 @@
+1. H vs A, each at most +10%:
+   bush_sleeps +46% [+33%, +59%]: missed
+   barren_sleeps -18% [-21%, -16%]: met
+   barren_hopes +72% [+47%, +101%]: missed
+   home_wrong_100 -20% [-24%, -16%]: met
+3. K vs A, each at most +10%:
+   bush_sleeps +126% [+103%, +151%]: missed
+   barren_sleeps -0% [-2%, +2%]: met
+   barren_hopes -7% [-19%, +6%]: met
+   home_wrong_100 -0% [-6%, +6%]: met
+2. barren false hopes, H vs C -56% [-65%, -44%]: unclear
+4. bush patterns taught, K vs A -54% [-55%, -53%]: met
+Means (A, C, H, E, K):
+   bush_taught: 35714.5, 34153.4, 33385.9, 14953.5, 16781.5
+   bush_sleeps: 14.2, 12.8, 19.6, 19.4, 36.2
+   barren_sleeps: 56.3, 25.9, 46.9, 28.7, 56.6
+   barren_hopes: 1.7, 17.0, 4.0, 66.3, 2.0
+   home_wrong_100: 0.6, 0.2, 0.2, 0.5, 0.6
+   home_wrong_300: 0.5, 0.2, 0.2, 0.5, 0.6
+   raised_sleeps: 64.9, 48.2, 64.5, 44.4, 73.0
+   bush_meals: 278.7, 281.7, 268.1, 266.9, 234.0
+   barren_meals: 32.5, 104.3, 58.7, 97.1, 37.4
+   barren_futile: 13.1, 2.3, 6.4, 2.6, 4.9
+   bush_written: 36000.0, 6344.4, 4589.9, 36000.0, 36000.0
