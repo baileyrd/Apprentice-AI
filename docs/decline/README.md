@@ -141,3 +141,48 @@ them; in a barren world food regrows anywhere, including where it ate, so
 a newborn's naive hope may be what keeps it finding food. The values'
 share has no lead yet: which value moved (eat, enter, rest or volatility)
 is the next thing to look at.
+
+## Results of the follow-up (seeds 101–140, second run)
+
+`cargo run --release --bin decline` prints [results.txt](results.txt) and
+writes [decline.csv](decline.csv) and [calibration.csv](calibration.csv).
+The first run's arms reproduce exactly.
+
+Sleeps per 1,000 steps, each arm's mean with its 90% interval:
+
+| Arm | Mean [90%] | Raw diff vs N [90%] | Gap closed |
+|---|---|---|---|
+| N newborn | 25.0 [24.2, 25.9] | — | — |
+| E experienced | 28.4 [27.7, 29.2] | +3.4 [+2.3, +4.4] | — |
+| P patterns | 26.5 [25.8, 27.3] | +1.5 [+0.5, +2.5] | 56% |
+| M maps | 28.3 [27.5, 29.1] | +3.3 [+2.4, +4.2] | 3% |
+| V own values | 27.4 [26.7, 28.1] | +2.3 [+1.5, +3.1] | 31% |
+| **PV patterns + values** | 26.2 [25.6, 26.8] | +1.1 [+0.2, +2.1] | 67% |
+| F all | 24.5 [23.7, 25.3] | −0.6 [−1.6, +0.5] | 116% |
+
+**PV contributes but does not carry**: it closes two thirds of the gap, but
+its interval against the newborn stays above 0. The last third needs the
+maps wiped too (F), though wiping the maps alone does nothing.
+
+Calibration on eaten squares back in view (predicted chance of food /
+actual share, bias with 90% interval over seeds):
+
+| Steps unseen | E experienced | N newborn |
+|---|---|---|
+| 1–7 | 0.004 / 0.002, +0.002 [+0.002, +0.003] | 0.007 / 0.002, +0.005 [+0.004, +0.006] |
+| 8–31 | 0.006 / 0.004, +0.002 [+0.001, +0.003] | 0.030 / 0.009, +0.022 [+0.018, +0.026] |
+| 32–127 | 0.018 / 0.020, +0.000 [−0.005, +0.005] | 0.084 / 0.028, +0.065 [+0.056, +0.075] |
+| 128+ | 0.009 / 0.047, **−0.035** [−0.045, −0.024] | 0.020 / 0.054, **−0.027** [−0.037, −0.017] |
+
+- **Pessimism sits in the long-unseen bin (128+) for every arm**, newborn
+  included (−0.025 to −0.035). Patterns judge squares by time since they
+  changed, not since last seen, so a square unseen for a long time looks
+  like any other eaten square. Experience does not cause it.
+- **Below 128 steps the experienced apprentice is close to calibrated**
+  (biases ≤ 0.002), while the newborn, P, PV and F are optimistic,
+  most of all at 32–127 (0.08 predicted against 0.03 actual).
+- So the newborn does not win by being right. It wins by over-hoping on
+  squares it left a while ago, and the hope sends it back out. Experience
+  removes that optimism and leaves the shared long-unseen pessimism in
+  place. Why the extra trips pay (food found on the way, or on the square
+  itself) is not checked.
