@@ -85,6 +85,24 @@ regrowth, and the bush worlds teach "eaten squares come back".
 The seeds are the same (101–140), so the first run's arms are rerun
 unchanged and must reproduce its numbers.
 
+## Calibration check (Nano, 2026-10-30), fixed before its run
+
+Where does any pessimism sit? In world 5, each time a square it ate from
+in world 5 comes back into view (in view now, not in view the step
+before), record its belief that the square holds food just before looking
+(as for false hopes) and whether it does. Bin by steps since that square
+was last in view: **1–7, 8–31, 32–127, 128+**.
+
+Per arm and bin: sightings, mean predicted chance of food, actual share
+with food (both pooled over sightings), and the bias (predicted − actual)
+as a mean over seeds with at least one sighting in the bin, with its 90%
+interval. Arms: all seven above, same seeds 101–140. Reported only; no
+rule. The age arm Nano first asked for is skipped: the patterns have no
+input for the apprentice's own age.
+
+Reading, fixed now: a bin is **pessimistic** if its bias interval lies
+wholly below 0, **optimistic** if wholly above.
+
 ## Results (seeds 101–140, first run)
 
 `cargo run --release --bin decline` prints [results.txt](results.txt) and
