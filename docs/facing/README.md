@@ -243,3 +243,127 @@ own state, updated by the motor (path integration on a ring), so that
 prediction needs only heading × motor, which every learner here already
 solves. That would be giving the apprentice a heading sense, a design
 choice for Nano, like the offset it already gets in the grid world.
+
+## Third try: an innate heading ring (rules fixed before any run)
+
+Nano's choice (2026-10-30): give the apprentice heading as an innate sense,
+not something it must learn to keep.
+
+- **The ring.** Four input units, one active. The active unit shifts by
+  one each time the body really turns, one way for left and the other for
+  right; it doesn't move on stills (or, in walking, on steps forward).
+  It is unlabelled: per seed, the unit that is active facing north is
+  random, and so is which way round the ring runs. The motor→turn mapping
+  is still shuffled per seed, so which motor moves the ring which way is
+  still learned. Like a vestibular sense, it reports the turn that
+  happened, not the motor fired.
+- **Learners.** Every memory from before (none, recent 3, context, gated)
+  now also gets the ring as input. The probe still reads heading off the
+  hidden layer.
+- **Matching, again:** same marks (20,000 steps; one-ahead ≥ 95%,
+  two-ahead ≥ 90%, after stares ≥ 5 ≥ 90%; ≥ 19 of 20 seeds), judged once
+  on fresh seeds 61–80. Expected: all four pass, no memory included,
+  because with the ring the next view is a two-way combination (ring and
+  motor), like turning. The 80% no-memory ceiling no longer applies: the
+  ring gives heading by design.
+
+### Stage 3: walking (rules fixed before any run)
+
+- **World.** The matching world (north and south alike), plus a fourth
+  motor, *forward*, shuffled in with the others. The centre box gets its
+  own look, and beyond the plus is dark (all zeros, plus the usual noise).
+  - From the centre, forward steps into the box it faces.
+  - From a side box, it faces the centre box when facing back the way it
+    came, and dark the other three ways. Forward toward the centre steps
+    back into it; forward into the dark does nothing.
+  - Turning and the ring work as before; forward doesn't turn it.
+- **Life.** Stares as before, then a random one of left, right, forward.
+  Every step that isn't a stare is scored.
+- **Learners.** All four memories, each with the ring.
+- **Marks.** One-ahead ≥ 95%, two-ahead ≥ 90%, after stares ≥ 5 ≥ 90%
+  (all over the last 100 scored steps, the long-stare one over the second
+  half), ≥ 19 of 20 seeds, 40,000 steps. Tuning on 101–110; judged once on
+  seeds 81–100.
+- **Expected:** no memory fails. In a side box facing dark, the ring says
+  where it faces but not which side box it is in, so whether a turn shows
+  the centre or more dark depends on the heading it had when it stepped
+  in: memory across steps again. Whether recent 3 or context can carry
+  it is the question.
+
+### Two checks Nano asked for
+
+- **"Lingers near one of the pair."** For the no-memory probe at 0.64 on
+  matching-box turns: the share of the more common of north and south in
+  those same turns is recorded per seed. If its median is close to 0.64,
+  the explanation holds.
+- **Gated probe at 0.49.** Noted in the results below.
+
+## Third-try results
+
+### The two checks
+
+- **"Lingers near one of the pair" doesn't hold.** On seeds 41–60 (no
+  ring), the more common of north and south makes up a median 0.55 of the
+  last 100 matching-box turns: always guessing it scores 0.55, not 0.64.
+  The real cause was the probe itself: it kept learning online, so during
+  a stare at, say, north it was trained on north several times just before
+  being scored on the turn that ends that stare. Its own weights carried
+  heading through the stare. With the probe frozen for the second half of
+  each life (now the standard, for both probes), matching-box probe
+  accuracy drops to 0.54 for no memory, 0.53 for recent 3, 0.50 for
+  context and 0.48 for gated, all at the 0.55 majority. **Correction to
+  the second-try results:** recent 3 and context carry no heading the
+  probe can find; the +0.03 to +0.06 there was the same artefact.
+- **Gated probe at 0.49 (0.48 frozen).** Gating gives each motor its own
+  first-layer weights, so the hidden code for the same heading differs by
+  motor. About 3 in 4 steps are stares, so the probe learns mostly the
+  do-nothing motor's code and is then scored on turns. Checked: scored on
+  stares instead, the gated probe reads heading at 0.71 overall, close to
+  the other memories (0.75–0.77, where 0.75 is the most anyone can get
+  with north and south alike); scored on turns, 0.59. So gating's low
+  probe is a property of the probe meeting a motor-split code, not
+  evidence that gating loses heading. With the ring, the same happens
+  (0.19 overall).
+
+### Matching with the ring, seeds 61–80: met for every memory
+
+| Memory (+ ring) | One-ahead | Two-ahead | After stares ≥ 5 | Probe | Seeds passing |
+|-----------------|-----------|-----------|------------------|-------|---------------|
+| None            | 1.00      | 1.00      | 1.00             | 0.96  | 20/20         |
+| Recent 3        | 1.00      | 1.00      | 1.00             | 1.00  | 20/20         |
+| Context         | 1.00      | 1.00      | 1.00             | 1.00  | 20/20         |
+| Gated           | 1.00      | 1.00      | 1.00             | 0.19  | 20/20         |
+
+As expected: given heading, the next view is a two-way combination (ring
+and motor), and every learner, no memory included, solves it. Which motor
+turns the ring which way was still learned per seed.
+
+### Walking with the ring, seeds 81–100: missed for every memory
+
+| Memory (+ ring) | One-ahead | Two-ahead | After stares ≥ 5 | Place probe | Seeds passing |
+|-----------------|-----------|-----------|------------------|-------------|---------------|
+| None            | 0.77      | 0.75      | 0.76             | 0.22        | 0/20          |
+| Recent 3        | 0.77      | 0.75      | 0.76             | 0.24        | 0/20          |
+| Context         | 0.79      | 0.77      | 0.78             | 0.30        | 0/20          |
+| Gated           | 0.86      | 0.85      | 0.86             | 0.26        | 0/20          |
+
+- **The same wall, one level up.** With heading given, what is left
+  unknown is *where* it stands: in a side box facing the dark, the view
+  and ring don't say which side box, and whether a turn shows the centre
+  depends on the heading it had when it stepped in. That is memory across
+  steps again, and again no learner keeps it: the place probe (centre or
+  which side box, frozen) reads 0.22–0.30.
+- **Gating helps here** (0.86 against 0.77, the only memory clearly above
+  no memory), but nowhere near the mark; on tuning seeds it stayed at
+  0.85 at 120,000 steps.
+- **Read across stages:** every time the world asks for a fact the
+  current percept doesn't carry (heading in matching, place in walking),
+  the learners fail; every time it is in the percept (views in turning,
+  the ring in matching), they pass at 100%. The innate ring moved the
+  wall from heading to place; it didn't teach the learners to keep state.
+
+The obvious next step would be an innate place sense too (path
+integration of steps, like the ring for turns). That would make walking
+a two-way combination again, and probably pass, but it would also mean
+giving the apprentice, built in, every fact it fails to keep. Whether to
+do that or to look for a learner that keeps state is Nano's call.
