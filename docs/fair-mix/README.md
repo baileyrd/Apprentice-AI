@@ -78,3 +78,29 @@ order should matter to a network at rate 0.2. Rule 1 unclear: PR #19's
 gate cost bush sleeps (+24%) with the table, before the network, so order
 may not be all of it. Rule 3 unclear: proportions fix the base rate of
 change, but the most "surprising" non-changes may still be odd ones.
+
+## Tuning (seeds 101–110)
+
+As first built (spread evenly, budget split in proportion), fair mix did
+what the lead predicted for false hopes: with the gate 26.6 → 2.1 per
+barren world, with a budget 45.4 → 0.0 (today's default: 0.6). But bush
+sleeps rose (gate 10.2 → 15.3, budget 13.0 → 20.6; default 7.0), and the
+gate kept its odd barren shape: half the sleeps, three times the meals.
+
+- **Confirmations at their own age.** The gate counts a confirmation by
+  its age group's start (age 37 is taught as 32), while diary entries are
+  taught at their own age. A table keyed by age group never noticed; the
+  network takes age as an input and does. Teaching confirmations at their
+  own age, with fair mix only, brought the gated apprentice close to the
+  default in the barren world (sleeps 25.0 → 50.8, default 56.2; meals 107
+  → 52, default 36) and cut bush sleeps to 12.3, though false hopes rose
+  to 5.3. **Kept**: it makes fair mix mean "taught as if every sighting
+  were in the diary". This goes beyond "spacing and how a budget is
+  split" named in the rules above; the rules themselves are unchanged.
+- **A budget split half and half** between changes and non-changes,
+  instead of in proportion: bush sleeps 20.6 → 22.4, false hopes 0.0 →
+  0.2. No better; the bush cost of a budget is not the share of changes
+  but how few samples the network sees. **Kept: in proportion.**
+
+Before judging, rule 2 looked likely, rule 1 likely to miss on bush
+sleeps, rule 3 likely to miss on bush sleeps, rule 4 met.
