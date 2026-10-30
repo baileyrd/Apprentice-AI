@@ -186,3 +186,34 @@ actual share, bias with 90% interval over seeds):
   removes that optimism and leaves the shared long-unseen pessimism in
   place. Why the extra trips pay (food found on the way, or on the square
   itself) is not checked.
+
+## Second follow-up (Nano, 2026-10-30), fixed before its run
+
+Same seeds (101–140), world 5, arms as above.
+
+### 1. Meals on hopeful trips: at the target or on the way
+
+- **Goal**: the square whose value made the chosen move the best one (the
+  planner's best square for that first step). Eating and resting have no
+  goal.
+- **Hopeful trip**: a run of consecutive moves with the same goal, where the
+  goal is a square it ate from earlier in world 5 and was out of view when
+  the run began.
+- **A trip's meals**: meals in its steps or in the 3 steps after its last
+  move (enough to reach anything seen from where it stopped). **At target**
+  if eaten at the goal, **en route** otherwise.
+
+Reported per arm, per 1,000 steps: hopeful trips, meals at target, meals en
+route, and meals not on any trip. Each against the newborn as a raw
+difference with a 90% interval. Also reported: volatility at the start of
+world 5 (it scales the planner's existing pull toward squares not looked at
+for a while).
+
+### 2. Calibration with time-unseen on
+
+The calibration check rerun with `PatternNet::unseen` on for the whole life
+(upbringing included; sweeping plans off). Same bins, same reading rule
+(pessimistic if the bias interval lies wholly below 0). The question is
+whether the 128+ bin stops being pessimistic.
+
+Both are reported only; no rule is judged.
