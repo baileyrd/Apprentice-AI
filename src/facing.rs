@@ -458,6 +458,15 @@ fn place(at: Option<usize>) -> usize {
     at.unwrap_or(SIDES)
 }
 
+/// Which way the centre lies from where it faces, in turns to the right,
+/// as a probe class; [`SIDES`] when it stands in the centre. Where it
+/// stands, seen from its own heading.
+fn centre_direction(world: &World) -> usize {
+    world.at().map_or(SIDES, |side| {
+        (opposite(side) + SIDES - world.heading()) % SIDES
+    })
+}
+
 /// Accuracies at the end of a life. Each is `None` when nothing counted.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Score {
@@ -481,6 +490,9 @@ pub struct Score {
     /// Where it stands (centre or which side box), read off the hidden
     /// layer by a frozen probe, on the last `window` scored steps.
     pub probe_place: Option<f64>,
+    /// Which way the centre lies from where it faces (ahead, right,
+    /// behind, left, or it is in the centre), by a frozen probe likewise.
+    pub probe_centre: Option<f64>,
 }
 
 /// A stare this long or longer counts as long.
@@ -513,7 +525,8 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
     let mut driver = Driver::new(&world, seed ^ 0xd21e);
     let mut probe = Probe::new(SIDES, HIDDEN, 0.02);
     let mut place_probe = Probe::new(SIDES + 1, HIDDEN, 0.02);
-    let mut places = vec![];
+    let mut centre_probe = Probe::new(SIDES + 1, HIDDEN, 0.02);
+    let (mut places, mut centres) = (vec![], vec![]);
     let (mut ones, mut twos, mut probes, mut long) = (vec![], vec![], vec![], vec![]);
     let (mut probes_matching, mut headings_matching) = (vec![], vec![]);
     let mut sense = world.percept(life.ring);
@@ -527,6 +540,7 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
         let heading = world.heading();
         let matching = world.faces_matching();
         let stands = place(world.at());
+        let centre = centre_direction(&world);
         world.fire(motor);
         let next = world.percept(life.ring);
         let truth = world.faced();
@@ -537,6 +551,7 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
             let read = probe.read(&hidden) == heading;
             probes.push(read);
             places.push(place_probe.read(&hidden) == stands);
+            centres.push(centre_probe.read(&hidden) == centre);
             if matching {
                 probes_matching.push(read);
                 headings_matching.push(heading);
@@ -554,6 +569,7 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
         if t < life.steps / 2 {
             probe.learn(&hidden, heading);
             place_probe.learn(&hidden, stands);
+            centre_probe.learn(&hidden, centre);
         }
         learner.learn(&sense, motor, &next);
         sense = next;
@@ -567,6 +583,7 @@ pub fn live(life: &Life, seed: u64) -> Result<Score, NetError> {
         probe_matching: tail_rate(&probes_matching, life.window),
         majority_matching: majority(&headings_matching, life.window),
         probe_place: tail_rate(&places, life.window),
+        probe_centre: tail_rate(&centres, life.window),
     })
 }
 
@@ -607,10 +624,12 @@ pub fn ceiling(c: &Ceiling, seed: u64) -> Score {
     };
     let mut life = Vec::with_capacity(c.steps);
     let mut places = Vec::with_capacity(c.steps);
+    let mut centres = Vec::with_capacity(c.steps);
     let mut percept = world.percept(true);
     for _ in 0..c.steps {
         let (motor, _) = driver.drive();
         places.push(place(world.at()));
+        centres.push(centre_direction(&world));
         world.fire(motor);
         let next = world.percept(true);
         life.push(Sample {
@@ -623,13 +642,16 @@ pub fn ceiling(c: &Ceiling, seed: u64) -> Score {
     gru.train(&life, &c.training);
 
     let mut place_probe = Probe::new(SIDES + 1, c.hidden, 0.02);
+    let mut centre_probe = Probe::new(SIDES + 1, c.hidden, 0.02);
     let mut h = gru.rest();
-    for (sample, &at) in life.iter().zip(&places) {
+    for ((sample, &at), &centre) in life.iter().zip(&places).zip(&centres) {
         h = gru.step(&h, &sample.input).0;
         place_probe.learn(&h, at);
+        centre_probe.learn(&h, centre);
     }
 
     let (mut ones, mut twos, mut long, mut placed) = (vec![], vec![], vec![], vec![]);
+    let mut centred = vec![];
     let mut now = driver.drive();
     let mut two_ahead: Option<usize> = None;
     for _ in 0..c.eval {
@@ -638,6 +660,7 @@ pub fn ceiling(c: &Ceiling, seed: u64) -> Score {
         let (h1, one) = gru.step(&h, &input(&percept, motor));
         let two = gru.step(&h1, &input(&one, after.0)).1;
         let stands = place(world.at());
+        let centre = centre_direction(&world);
         world.fire(motor);
         let next = world.percept(true);
         let truth = world.faced();
@@ -646,6 +669,7 @@ pub fn ceiling(c: &Ceiling, seed: u64) -> Score {
             let hit = nearest(looks, &one) == truth;
             ones.push(hit);
             placed.push(place_probe.read(&h1) == stands);
+            centred.push(centre_probe.read(&h1) == centre);
             if stared >= LONG_STARE {
                 long.push(hit);
             }
@@ -666,6 +690,7 @@ pub fn ceiling(c: &Ceiling, seed: u64) -> Score {
         probe_matching: None,
         majority_matching: None,
         probe_place: tail_rate(&placed, c.window),
+        probe_centre: tail_rate(&centred, c.window),
     }
 }
 

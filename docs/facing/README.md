@@ -398,3 +398,47 @@ the usual way, do walking? If not, stop and report.
 - **Stop rule (Nano's):** if it misses, stop and report. Only if it passes
   comes step 2: a recurrent net with e-prop-style eligibility traces, online
   and local, with its own rules committed first and fresh seeds.
+
+### Step 1 results: met
+
+**Walking + ring, GRU trained offline by BPTT, seeds 101–120: met, 20/20.**
+
+| Learner | One-ahead | Two-ahead | After stares ≥ 5 | Place probe | Centre-direction probe | Seeds passing |
+|---------|-----------|-----------|------------------|-------------|------------------------|---------------|
+| GRU     | 1.00      | 1.00      | 1.00             | 0.39        | 0.90                   | 20/20         |
+
+So a network that keeps state can learn walking from this data; the task
+is not too hard, and the local learners' miss is about how they learn.
+
+The place probe (which side box, in compass terms) reads only 0.39, though
+the GRU predicts perfectly. A second probe, added after seeing that and
+reported for every learner from now on, asks where the centre lies *from
+where it faces* (ahead, right, behind, left, or it is in the centre): 0.90.
+The GRU keeps place egocentrically, relative to its heading, not on the
+compass. For the local learners on seeds 81–100 that probe reads 0.37–0.49
+(no memory 0.39), so they keep neither.
+
+## Step 2: e-prop, online and local (rules fixed before any run)
+
+- **Learner.** A recurrent network of 64 leaky tanh units, no self
+  connections: `h(t) = α·h(t−1) + (1−α)·tanh(Win·x(t) + Wrec·h(t−1) + b)`,
+  with each unit's leak α fixed and spread evenly over 0.5–0.95 (fast to
+  slow memory). Output `y = Wout·h(t) + bout`, the next percept. Input:
+  percept (8 + ring 4) and motor (4), as for the GRU.
+- **Learning: e-prop** (Bellec et al., 2020), online, every step, no
+  replay. Each input and recurrent weight keeps an eligibility trace,
+  `ε_ij(t) = α_j·ε_ij(t−1) + (1−α_j)·tanh′(a_j(t))·z_i(t)`, where `z_i` is
+  its presynaptic activity (input, or the unit's activity at `t−1`). A
+  learning signal `L_j(t) = Σ_k Wout_kj·(y_k − y*_k)` is broadcast to each
+  unit (symmetric feedback), and each weight moves by `−η·L_j(t)·ε_ij(t)`.
+  `Wout` learns by the delta rule. Every update uses only that synapse's
+  own trace and its unit's learning signal: local in space and time.
+- **World and scoring.** Walking + ring, scored like the other online
+  learners: last 100 scored steps of the life, after stares ≥ 5 over the
+  second half, both probes frozen for the second half.
+- **Budget: 400,000 steps**, one online pass. The GRU saw 40,000 steps 20
+  times (800,000 step-updates); an online learner can't replay, so it
+  gets a longer life instead, half the GRU's updates.
+- **Marks** (same): one-ahead ≥ 95%, two-ahead ≥ 90%, after stares ≥ 5
+  ≥ 90%, in ≥ 19 of 20 fresh seeds, **121–140**. Tuning (rate, hidden
+  size, leak range) only on seeds 201–210, disclosed.

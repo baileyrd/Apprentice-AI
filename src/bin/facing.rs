@@ -141,7 +141,7 @@ fn report(stage: Stage, label: &str, seeds: &[u64], scores: &[Score]) -> usize {
     let col = |f: fn(&Score) -> Option<f64>| median(scores.iter().filter_map(f).collect());
     let passed = scores.iter().filter(|s| passes(stage, s)).count();
     println!(
-        "{:<10} {:>6.2} {:>6.2} {:>8.2} {:>6.2} {:>9.2} {:>8.2} {:>6.2}   {passed}/{}",
+        "{:<10} {:>6.2} {:>6.2} {:>8.2} {:>6.2} {:>9.2} {:>8.2} {:>6.2} {:>7.2}   {passed}/{}",
         label,
         col(|s| s.one),
         col(|s| s.two),
@@ -150,6 +150,7 @@ fn report(stage: Stage, label: &str, seeds: &[u64], scores: &[Score]) -> usize {
         col(|s| s.probe_matching),
         col(|s| s.majority_matching),
         col(|s| s.probe_place),
+        col(|s| s.probe_centre),
         scores.len(),
     );
     let missed: Vec<u64> = seeds
@@ -187,7 +188,9 @@ fn execute_ceiling(a: &Args) -> Result<(), String> {
         a.seeds.first(),
         a.seeds.last()
     );
-    println!("learner    one    two  stare5+  probe  probe NS  most NS  place   passed (medians)");
+    println!(
+        "learner    one    two  stare5+  probe  probe NS  most NS  place  centre   passed (medians)"
+    );
     let handles: Vec<_> = a
         .seeds
         .iter()
@@ -216,7 +219,9 @@ fn execute(a: &Args) -> Result<(), String> {
         a.seeds.first(),
         a.seeds.last()
     );
-    println!("memory     one    two  stare5+  probe  probe NS  most NS  place   passed (medians)");
+    println!(
+        "memory     one    two  stare5+  probe  probe NS  most NS  place  centre   passed (medians)"
+    );
     let need = (PASS_SHARE * a.seeds.len() as f64).ceil() as usize;
     for memory in [
         Memory::None,
