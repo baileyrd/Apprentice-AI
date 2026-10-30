@@ -74,3 +74,42 @@ Fixed before the run:
 My guess before running: P carries most of it. Patterns are the only part
 taught in every world of the life, so they average bush and barren
 regrowth, and the bush worlds teach "eaten squares come back".
+
+## Results (seeds 101–140, one run)
+
+`cargo run --release --bin decline` prints [results.txt](results.txt) and
+writes [decline.csv](decline.csv). About ten minutes on 4 cores.
+
+Sleeps per 1,000 steps in world 5 (newborn 25.0):
+
+| Arm | Mean | vs newborn | Raw difference | Gap closed |
+|---|---|---|---|---|
+| E experienced | 28.4 | +13% [+9%, +18%] | +3.4 [+2.3, +4.4] | — |
+| P patterns wiped | 26.5 | +6% [+2%, +10%] | +1.5 [+0.5, +2.5] | 56% |
+| M maps wiped | 28.3 | +13% [+9%, +17%] | +3.3 [+2.4, +4.2] | 3% |
+| V own values wiped | 27.4 | +9% [+6%, +13%] | +2.3 [+1.5, +3.1] | 31% |
+| F all wiped | 24.5 | −2% [−6%, +2%] | −0.6 [−1.6, +0.5] | 116% |
+
+Meals per 1,000 steps (newborn 20.7): E 16.0, P 20.3, M 15.7, V 16.8,
+F 21.6. False hopes in the first 1,000 steps (newborn 24.3): E 0.7, P 21.4,
+M 0.0, V 1.9, F 24.5.
+
+Read by the rules above:
+
+- **The decline is real on these seeds**: E costs 3.4 more sleeps per 1,000
+  steps than a newborn, interval wholly above 0.
+- **The control holds**: wiping all three parts brings it back to a newborn
+  (raw −0.6, interval contains 0).
+- **No single part carries it.** The patterns close 56% of the gap, but the
+  apprentice is still 1.5 sleeps per 1,000 steps worse than a newborn
+  (interval above 0). **Patterns and its own values both contribute** (56%
+  and 31%). The maps do not (3%).
+
+What the other numbers suggest, not checked: the experienced apprentice
+eats less (16 against 21 meals per 1,000 steps), and wiping the patterns
+alone restores the meals (20.3). Experienced patterns say eaten squares stay
+gone (false hopes 0.7 against a newborn's 24), so it stops going back to
+them; in a barren world food regrows anywhere, including where it ate, so
+a newborn's naive hope may be what keeps it finding food. The values'
+share has no lead yet: which value moved (eat, enter, rest or volatility)
+is the next thing to look at.
