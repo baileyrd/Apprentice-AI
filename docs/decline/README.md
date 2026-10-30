@@ -78,7 +78,7 @@ regrowth, and the bush worlds teach "eaten squares come back".
 ## Results (seeds 101–140, one run)
 
 `cargo run --release --bin decline` prints [results.txt](results.txt) and
-writes [decline.csv](decline.csv). About ten minutes on 4 cores.
+writes [decline.csv](decline.csv).
 
 Sleeps per 1,000 steps in world 5 (newborn 25.0):
 
