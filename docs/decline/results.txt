@@ -1,0 +1,58 @@
+sleeps_per_1k (newborn 25.04 [24.19, 25.89]):
+   E 28.41 [27.67, 29.15]: +13% [+9%, +18%], raw +3.38 [+2.34, +4.41], gap closed 0%
+   P 26.52 [25.76, 27.29]: +6% [+2%, +10%], raw +1.49 [+0.49, +2.49], gap closed 56%
+   M 28.30 [27.53, 29.07]: +13% [+9%, +17%], raw +3.26 [+2.36, +4.17], gap closed 3%
+   V 27.38 [26.66, 28.09]: +9% [+6%, +13%], raw +2.34 [+1.54, +3.13], gap closed 31%
+   PV 26.16 [25.57, 26.76]: +5% [+1%, +9%], raw +1.12 [+0.18, +2.07], gap closed 67%
+   F 24.49 [23.69, 25.28]: -2% [-6%, +2%], raw -0.55 [-1.58, +0.48], gap closed 116%
+meals_per_1k (newborn 20.66 [18.37, 22.95]):
+   E 16.00 [13.90, 18.10]: -23% [-32%, -12%], raw -4.66 [-7.29, -2.04], gap closed -0%
+   P 20.26 [18.18, 22.35]: +0% [-12%, +14%], raw -0.40 [-3.08, +2.28], gap closed 91%
+   M 15.74 [13.48, 18.00]: -25% [-35%, -15%], raw -4.92 [-7.14, -2.71], gap closed -6%
+   V 16.75 [14.98, 18.52]: -17% [-27%, -5%], raw -3.91 [-6.15, -1.68], gap closed 16%
+   PV 18.14 [16.40, 19.88]: -9% [-19%, +2%], raw -2.52 [-4.90, -0.15], gap closed 46%
+   F 21.59 [19.43, 23.75]: +6% [-7%, +22%], raw +0.93 [-1.80, +3.65], gap closed 120%
+hopes (newborn 24.25 [22.91, 25.59]):
+   E 0.72 [-0.03, 1.48]: -95% [-96%, -94%], raw -23.52 [-25.10, -21.95], gap closed -0%
+   P 21.43 [20.43, 22.42]: -11% [-17%, -4%], raw -2.83 [-4.59, -1.06], gap closed 88%
+   M 0.00 [0.00, 0.00]: -96% [-96%, -96%], raw -24.25 [-25.59, -22.91], gap closed -3%
+   V 1.90 [-0.31, 4.11]: -95% [-96%, -94%], raw -22.35 [-24.90, -19.80], gap closed 5%
+   PV 19.55 [18.32, 20.78]: -19% [-25%, -13%], raw -4.70 [-6.47, -2.93], gap closed 80%
+   F 24.45 [22.97, 25.93]: +1% [-6%, +8%], raw +0.20 [-1.67, +2.07], gap closed 101%
+calibration on eaten squares back in view, by steps since last in view:
+   E:
+      1-7: 15333 sightings, predicted 0.004, actual 0.002, bias +0.002 [+0.002, +0.003] over 40 seeds
+      8-31: 4606 sightings, predicted 0.006, actual 0.004, bias +0.002 [+0.001, +0.003] over 40 seeds
+      32-127: 3176 sightings, predicted 0.018, actual 0.020, bias +0.000 [-0.005, +0.005] over 40 seeds
+      128+: 1792 sightings, predicted 0.009, actual 0.047, bias -0.035 [-0.045, -0.024] over 40 seeds
+   P:
+      1-7: 20337 sightings, predicted 0.005, actual 0.002, bias +0.004 [+0.003, +0.005] over 40 seeds
+      8-31: 5973 sightings, predicted 0.022, actual 0.006, bias +0.018 [+0.013, +0.022] over 40 seeds
+      32-127: 4868 sightings, predicted 0.071, actual 0.026, bias +0.059 [+0.047, +0.071] over 40 seeds
+      128+: 2207 sightings, predicted 0.013, actual 0.044, bias -0.027 [-0.035, -0.018] over 40 seeds
+   M:
+      1-7: 16066 sightings, predicted 0.004, actual 0.001, bias +0.003 [+0.002, +0.004] over 40 seeds
+      8-31: 4998 sightings, predicted 0.007, actual 0.005, bias +0.001 [+0.000, +0.002] over 40 seeds
+      32-127: 3106 sightings, predicted 0.020, actual 0.019, bias +0.000 [-0.003, +0.004] over 40 seeds
+      128+: 1716 sightings, predicted 0.008, actual 0.048, bias -0.026 [-0.037, -0.016] over 40 seeds
+   V:
+      1-7: 14091 sightings, predicted 0.005, actual 0.001, bias +0.004 [+0.003, +0.005] over 40 seeds
+      8-31: 3856 sightings, predicted 0.009, actual 0.006, bias +0.002 [+0.000, +0.004] over 40 seeds
+      32-127: 2734 sightings, predicted 0.022, actual 0.028, bias -0.004 [-0.008, +0.001] over 40 seeds
+      128+: 1741 sightings, predicted 0.012, actual 0.047, bias -0.031 [-0.040, -0.022] over 40 seeds
+   PV:
+      1-7: 15474 sightings, predicted 0.004, actual 0.001, bias +0.003 [+0.002, +0.004] over 40 seeds
+      8-31: 4706 sightings, predicted 0.021, actual 0.005, bias +0.018 [+0.014, +0.022] over 40 seeds
+      32-127: 3838 sightings, predicted 0.067, actual 0.023, bias +0.057 [+0.046, +0.068] over 40 seeds
+      128+: 2043 sightings, predicted 0.009, actual 0.043, bias -0.027 [-0.036, -0.017] over 40 seeds
+   F:
+      1-7: 14317 sightings, predicted 0.008, actual 0.003, bias +0.005 [+0.004, +0.007] over 40 seeds
+      8-31: 4807 sightings, predicted 0.032, actual 0.010, bias +0.027 [+0.022, +0.032] over 40 seeds
+      32-127: 4551 sightings, predicted 0.082, actual 0.034, bias +0.061 [+0.050, +0.073] over 40 seeds
+      128+: 2456 sightings, predicted 0.022, actual 0.050, bias -0.025 [-0.034, -0.016] over 40 seeds
+   N:
+      1-7: 16311 sightings, predicted 0.007, actual 0.002, bias +0.005 [+0.004, +0.006] over 40 seeds
+      8-31: 5164 sightings, predicted 0.030, actual 0.009, bias +0.022 [+0.018, +0.026] over 40 seeds
+      32-127: 4251 sightings, predicted 0.084, actual 0.028, bias +0.065 [+0.056, +0.075] over 40 seeds
+      128+: 2410 sightings, predicted 0.020, actual 0.054, bias -0.027 [-0.037, -0.017] over 40 seeds
+

@@ -374,6 +374,14 @@ pub struct Memory {
     traffic: Traffic,
 }
 
+/// Patterns as at birth.
+fn fresh_patterns(recall: Recall) -> Patterns {
+    match recall.pattern_net {
+        Some(net) => Patterns::with_net(recall.pattern_rate, recall.pattern_min, net),
+        None => Patterns::new(recall.pattern_rate, recall.pattern_min),
+    }
+}
+
 impl Memory {
     /// Fast beliefs learn at `rates.sensory`; the first map's prior at
     /// `rates.prior`.
@@ -395,10 +403,7 @@ impl Memory {
             lost: 0,
             lost_since: 0,
             doubt: (0, 0),
-            patterns: match recall.pattern_net {
-                Some(net) => Patterns::with_net(recall.pattern_rate, recall.pattern_min, net),
-                None => Patterns::new(recall.pattern_rate, recall.pattern_min),
-            },
+            patterns: fresh_patterns(recall),
             working: Vec::new(),
             confirmed: HashSet::new(),
             tally: Vec::new(),
@@ -406,6 +411,21 @@ impl Memory {
             offered: 0,
             traffic: Traffic::default(),
         }
+    }
+
+    /// Wipes the patterns, as at birth.
+    pub fn forget_patterns(&mut self) {
+        self.patterns = fresh_patterns(self.recall);
+    }
+
+    /// Wipes the catalog of maps and everything gathered since the last
+    /// sleep, as at birth; keeps the patterns and the clock.
+    pub fn forget_maps(&mut self, rates: Rates) {
+        let old = std::mem::replace(self, Self::new(rates, self.recall));
+        self.patterns = old.patterns;
+        self.t = old.t;
+        self.last_sleep = old.last_sleep;
+        self.traffic = old.traffic;
     }
 
     /// What it did with its sightings so far.
@@ -933,6 +953,35 @@ mod tests {
         let told = m.foretold(Last::Ate, 1, word).expect("learned");
         assert!(told[kind(Cell::Food)] > told[kind(Cell::Wall)]);
         assert_eq!(m.foretold(Last::Ate, 1, said(8)), None);
+    }
+
+    #[test]
+    fn forgetting_maps_keeps_patterns_and_forgetting_patterns_keeps_maps() {
+        let recall = Recall {
+            pattern_min: 1,
+            ..Recall::default()
+        };
+        let mut m = Memory::new(Rates::default(), recall);
+        let mut v = [Cell::Empty; VIEW * VIEW];
+        v[Observation::CENTER] = Cell::Food;
+        m.observe(&at(ORIGIN, v));
+        v[Observation::CENTER] = Cell::Empty;
+        for _ in 0..5 {
+            m.observe(&at(ORIGIN, v));
+        }
+        m.sleep();
+        let taught = m.expects(Last::Saw(Cell::Empty), 3);
+        assert!(taught.is_some() && m.believes(ORIGIN).is_some());
+        let t = m.t;
+        m.forget_maps(Rates::default());
+        assert_eq!(m.believes(ORIGIN), None);
+        assert_eq!((m.contexts(), m.t), (1, t));
+        assert_eq!(m.expects(Last::Saw(Cell::Empty), 3), taught);
+        m.forget_patterns();
+        assert_eq!(
+            m.expects(Last::Saw(Cell::Empty), 3),
+            Memory::new(Rates::default(), recall).expects(Last::Saw(Cell::Empty), 3)
+        );
     }
 
     #[test]

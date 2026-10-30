@@ -198,6 +198,22 @@ impl<M: WorldModel> Apprentice<M> {
         }
     }
 
+    /// Wipes its own learned values, as at birth: valence, volatility,
+    /// when it last saw each square, words heard and their meanings.
+    pub fn forget_values(&mut self) {
+        self.valence = Valence::new(self.drives.optimism);
+        self.volatility = 0.0;
+        self.last_seen.clear();
+        self.surprise = 0.0;
+        self.told.clear();
+        self.lexicon.clear();
+    }
+
+    /// Its model, to change from outside (for experiments that wipe it).
+    pub fn model_mut(&mut self) -> &mut M {
+        &mut self.model
+    }
+
     /// A mentor says `said` about the square at `at` (relative to the wake
     /// square).
     pub fn hear(&mut self, at: Pos, said: Said) {
@@ -523,6 +539,18 @@ mod tests {
         a.feel(&felt(64));
         let expected = 25.0 + 0.2 * (24.0 - 25.0);
         assert!((a.valence.eat[kind(Cell::Food)] - expected).abs() < 1e-12);
+    }
+
+    #[test]
+    fn forgetting_values_returns_them_to_birth() {
+        let mut a = taught(0.0);
+        a.volatility = 0.3;
+        a.last_seen.insert(ORIGIN, 4);
+        a.forget_values();
+        let born = apprentice(0.0);
+        assert_eq!(a.valence, born.valence);
+        assert_eq!(a.volatility, 0.0);
+        assert!(a.last_seen.is_empty() && a.lexicon.is_empty());
     }
 
     #[test]
