@@ -488,3 +488,29 @@ Every setting plateaued around 0.85; at 40,000 steps it was 0.74.
   and stops there.
 - The GRU's own answer is the useful clue: it keeps where it is
   *relative to its heading*, not on the compass.
+
+## Last local attempt: e-prop with motor-gated recurrent weights (rules fixed before any run)
+
+Nano's last try on walking before the facing track stops (2026-10-30).
+
+- **Learner.** The step-2 e-prop network, but each motor has its own set
+  of recurrent weights, and the motor fired picks which set carries
+  `h(t−1)` into this step:
+  `h(t) = α·h(t−1) + (1−α)·tanh(Win·x(t) + Wrec[m(t)]·h(t−1) + b)`.
+  Input weights stay shared (the motor's one-hot is still in `x`). No self
+  connections in any set. Why it might help: the GRU's answer was to keep
+  "where the centre lies from my heading" and rotate it on each turn; a
+  per-motor recurrent map can do that rotation directly (a turn-left map,
+  a turn-right map, a hold map for stares, a step map for forward).
+- **Learning.** E-prop as in step 2: each recurrent weight's trace only
+  takes in activity on steps when its motor fired, and otherwise just
+  decays. Same broadcast learning signal through `Woutᵀ`. Online, local.
+- **Same everything else:** 64 units, leaks spread over 0.5–0.95,
+  400,000 steps, walking + ring, scored as before; probes for compass
+  place and for centre direction (the egocentric place probe), frozen for
+  the second half.
+- **Marks** (same): one-ahead ≥ 95%, two-ahead ≥ 90%, after stares ≥ 5
+  ≥ 90%, in ≥ 19 of fresh seeds **141–160**. Tuning (rate only) on seeds
+  201–210, disclosed.
+- **Stop rule (Nano's):** if it misses, the facing track stops, and this
+  doc gets its final summary.
