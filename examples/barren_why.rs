@@ -7,7 +7,7 @@ use apprentice::apprentice::{Apprentice, Drives, Mind};
 use apprentice::body::Action;
 use apprentice::life::{Learner, barren, bushes};
 use apprentice::memory::{Memory, Recall};
-use apprentice::model::{Rates, WorldModel};
+use apprentice::model::Rates;
 use apprentice::sim::{Config, Event, Sim};
 use apprentice::world::Cell;
 

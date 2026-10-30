@@ -187,11 +187,14 @@ fn arms() -> [Setting; 2] {
     [a, s]
 }
 
-fn measure(seeds: &[u64]) -> Result<Vec<(u64, [Steps; 2])>, Error> {
+/// One seed and what each arm showed.
+type Row = (u64, [Steps; 2]);
+
+fn measure(seeds: &[u64]) -> Result<Vec<Row>, Error> {
     let [a, s] = arms();
     let workers = thread::available_parallelism().map_or(1, |n| n.get());
     let chunk = seeds.len().div_ceil(workers).max(1);
-    let parts: Vec<Result<Vec<(u64, [Steps; 2])>, SimError>> = thread::scope(|scope| {
+    let parts: Vec<Result<Vec<Row>, SimError>> = thread::scope(|scope| {
         let handles: Vec<_> = seeds
             .chunks(chunk)
             .map(|part| {
@@ -224,7 +227,7 @@ fn excess(row: &[Steps; 2]) -> f64 {
     extra - 0.5 * saved
 }
 
-fn report(rows: &[(u64, [Steps; 2])]) -> Result<(), Error> {
+fn report(rows: &[Row]) -> Result<(), Error> {
     let x: Vec<f64> = rows.iter().map(|r| excess(&r.1)).collect();
     let i = Interval::mean(&x)?;
     println!(
@@ -257,7 +260,7 @@ fn report(rows: &[(u64, [Steps; 2])]) -> Result<(), Error> {
     Ok(())
 }
 
-fn csv(rows: &[(u64, [Steps; 2])]) -> String {
+fn csv(rows: &[Row]) -> String {
     let mut out = String::from("seed,setting,hopes,wasted,sleeps,lost\n");
     for (seed, arms) in rows {
         for (name, s) in ["A", "S"].iter().zip(arms) {
