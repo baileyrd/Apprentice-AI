@@ -12,7 +12,7 @@ use crate::apprentice::{Apprentice, Drives, Mind};
 use crate::home::{Place, at_home_as, step, world};
 use crate::memory::{Memory, Recall, Traffic};
 use crate::model::{Rates, WorldModel, kind};
-use crate::sim::{Config, Event, Regrowth, Sim, SimError};
+use crate::sim::{Config, Event, Outcome, Regrowth, Sim, SimError};
 use crate::world::{Cell, Pos};
 
 /// The apprentice whose life is measured.
@@ -72,6 +72,18 @@ fn since(before: Traffic, after: Traffic) -> Traffic {
 }
 
 pub fn live(mind: &mut Learner, config: Config, seed: u64, steps: usize) -> Result<Stay, SimError> {
+    live_watched(mind, config, seed, steps, |_, _, _, _| {})
+}
+
+/// [`live`], with `watch` shown the mind, the world, the outcome and where
+/// it stood, after each step and before the next view is sensed.
+pub fn live_watched(
+    mind: &mut Learner,
+    config: Config,
+    seed: u64,
+    steps: usize,
+    mut watch: impl FnMut(&Learner, &Sim, &Outcome, Pos),
+) -> Result<Stay, SimError> {
     let mut sim = Sim::new(config, seed)?;
     let mut eaten: HashSet<Pos> = HashSet::new();
     let mut stay = Stay::default();
@@ -83,6 +95,7 @@ pub fn live(mind: &mut Learner, config: Config, seed: u64, steps: usize) -> Resu
         }
         let outcome = sim.step(mind.act(&sim.observe()));
         mind.feel(&outcome);
+        watch(mind, &sim, &outcome, here);
         stay.sleeps += u32::from(outcome.slept);
         match outcome.event {
             Event::Ate => {
@@ -152,9 +165,18 @@ fn offset(next: &Config) -> u64 {
 
 /// The new barren world after a bush-last upbringing on `seed`.
 pub fn barren_test(mind: &mut Learner, seed: u64) -> Result<Stay, SimError> {
+    barren_test_watched(mind, seed, |_, _, _, _| {})
+}
+
+/// [`barren_test`], with `watch` as in [`live_watched`].
+pub fn barren_test_watched(
+    mind: &mut Learner,
+    seed: u64,
+    watch: impl FnMut(&Learner, &Sim, &Outcome, Pos),
+) -> Result<Stay, SimError> {
     let next = barren();
     let seed = seed + offset(&next);
-    live(mind, next, seed, BARREN_STEPS)
+    live_watched(mind, next, seed, BARREN_STEPS, watch)
 }
 
 /// [`raise`], then a new world like `next`: each upbringing world, and the

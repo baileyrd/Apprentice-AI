@@ -4,6 +4,7 @@
 //! world is lived. Every arm is compared with a newborn in the same world.
 //! The comparison is in docs/decline/README.md.
 
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -11,9 +12,12 @@ use std::thread;
 
 use apprentice::apprentice::{Apprentice, Drives};
 use apprentice::judge::Interval;
-use apprentice::life::{BARREN_STEPS, Setting, Stay, barren, barren_test, raise};
+use apprentice::life::{BARREN_STEPS, Learner, Setting, Stay, barren, barren_test_watched, raise};
 use apprentice::memory::{Memory, Recall};
 use apprentice::model::Rates;
+use apprentice::model::{WorldModel, kind};
+use apprentice::sim::{Event, Outcome, Sim};
+use apprentice::world::{Cell, Pos};
 
 const USAGE: &str = "\
 usage: decline [--seeds N] [--from SEED] [--out DIR]
@@ -21,7 +25,8 @@ usage: decline [--seeds N] [--from SEED] [--out DIR]
 Seeds FROM..FROM+N-1 (default 101..140, tuning seeds). Lives world 5 of a
 barren-first life seven ways (E experienced, P patterns wiped, M maps
 wiped, V own values wiped, PV patterns and values wiped, F all three wiped,
-N newborn), prints each arm against the newborn and writes DIR/decline.csv (default DIR: runs/decline).";
+N newborn), prints each arm against the newborn and the calibration of eaten squares by time since last seen,
+and writes DIR/decline.csv and DIR/calibration.csv (default DIR: runs/decline).";
 
 type Error = Box<dyn std::error::Error>;
 
@@ -90,15 +95,72 @@ fn parse(args: &[String]) -> Result<Args, String> {
     })
 }
 
-/// World 5 of `seed`'s barren-first life, with `arm` wiped first.
-fn world_five(seed: u64, arm: Arm) -> Result<Stay, Error> {
-    let setting = Setting::from(Recall::default());
-    if arm == Arm::Newborn {
-        let memory = Memory::new(Rates::default(), setting.recall);
-        let mut mind = Apprentice::with_model(Drives::default(), memory, seed);
-        return Ok(barren_test(&mut mind, seed)?);
+/// Upper ends of the bins of steps since an eaten square was last in view:
+/// 1–7, 8–31, 32–127, 128+.
+const BINS: [u64; 4] = [7, 31, 127, u64::MAX];
+const BIN_NAMES: [&str; 4] = ["1-7", "8-31", "32-127", "128+"];
+
+/// One bin: sightings, summed predicted chance of food, sightings with food.
+#[derive(Debug, Default, Clone, Copy)]
+struct Bin {
+    seen: u32,
+    predicted: f64,
+    food: u32,
+}
+
+/// Predicted against actual food on eaten squares as they come back into
+/// view, by steps since last in view.
+#[derive(Debug, Default, Clone)]
+struct Calibration {
+    bins: [Bin; 4],
+    t: u64,
+    eaten: HashSet<Pos>,
+    last: HashMap<Pos, u64>,
+    view: HashSet<Pos>,
+}
+
+impl Calibration {
+    /// Called after each step, before the new view is sensed.
+    fn watch(&mut self, mind: &Learner, sim: &Sim, outcome: &Outcome, here: Pos) {
+        if outcome.event == Event::Ate {
+            self.eaten.insert(here);
+        }
+        self.t += 1;
+        let start = sim.start();
+        let view: HashSet<Pos> = (-1..=1)
+            .flat_map(|dy| (-1..=1).map(move |dx| (dx, dy)))
+            .map(|(dx, dy)| sim.pos().shift(dx, dy))
+            .collect();
+        for &at in &view {
+            let back = self.eaten.contains(&at) && !self.view.contains(&at);
+            if let (true, Some(&last)) = (back, self.last.get(&at)) {
+                let belief = mind.model().predict(at.shift(-start.x, -start.y));
+                let i = BINS
+                    .iter()
+                    .position(|&hi| self.t - last <= hi)
+                    .unwrap_or(BINS.len() - 1);
+                let bin = &mut self.bins[i];
+                bin.seen += 1;
+                bin.predicted += belief[kind(Cell::Food)];
+                bin.food += u32::from(sim.grid().get(at) == Cell::Food);
+            }
+        }
+        for &at in &view {
+            self.last.insert(at, self.t);
+        }
+        self.view = view;
     }
-    let (mut mind, _) = raise(setting, seed, &barren())?;
+}
+
+/// World 5 of `seed`'s barren-first life, with `arm` wiped first.
+fn world_five(seed: u64, arm: Arm) -> Result<(Stay, [Bin; 4]), Error> {
+    let setting = Setting::from(Recall::default());
+    let mut mind = if arm == Arm::Newborn {
+        let memory = Memory::new(Rates::default(), setting.recall);
+        Apprentice::with_model(Drives::default(), memory, seed)
+    } else {
+        raise(setting, seed, &barren())?.0
+    };
     if matches!(arm, Arm::Patterns | Arm::PatternsValues | Arm::Full) {
         mind.model_mut().forget_patterns();
     }
@@ -108,20 +170,24 @@ fn world_five(seed: u64, arm: Arm) -> Result<Stay, Error> {
     if matches!(arm, Arm::Values | Arm::PatternsValues | Arm::Full) {
         mind.forget_values();
     }
-    Ok(barren_test(&mut mind, seed)?)
+    let mut calibration = Calibration::default();
+    let stay = barren_test_watched(&mut mind, seed, |m, s, o, h| calibration.watch(m, s, o, h))?;
+    Ok((stay, calibration.bins))
 }
 
 /// One seed and world 5 under each arm, in `ARMS` order.
-type Row = (u64, Vec<Stay>);
+type Row = (u64, Vec<Stay>, Vec<[Bin; 4]>);
 
 fn rows(seeds: &[u64]) -> Result<Vec<Row>, Error> {
     let workers = thread::available_parallelism().map_or(1, |n| n.get());
     let chunk = seeds.len().div_ceil(workers).max(1);
     let one = |seed: u64| -> Result<Row, String> {
-        let stays: Result<Vec<Stay>, Error> = ARMS.iter().map(|&a| world_five(seed, a)).collect();
-        stays
-            .map(|s| (seed, s))
-            .map_err(|e| format!("seed {seed}: {e}"))
+        let worlds: Result<Vec<_>, Error> = ARMS.iter().map(|&a| world_five(seed, a)).collect();
+        let (stays, bins) = worlds
+            .map_err(|e| format!("seed {seed}: {e}"))?
+            .into_iter()
+            .unzip();
+        Ok((seed, stays, bins))
     };
     let parts: Vec<Result<Vec<Row>, String>> = thread::scope(|scope| {
         let handles: Vec<_> = seeds
@@ -161,7 +227,7 @@ fn mean(xs: &[f64]) -> f64 {
 fn csv(rows: &[Row]) -> String {
     let names: Vec<&str> = MEASURES.iter().map(|m| m.0).collect();
     let mut out = format!("seed,arm,{}\n", names.join(","));
-    for (seed, stays) in rows {
+    for (seed, stays, _) in rows {
         for (arm, stay) in ARMS.iter().zip(stays) {
             let values: Vec<String> = MEASURES.iter().map(|m| m.1(stay).to_string()).collect();
             out.push_str(&format!("{seed},{},{}\n", arm.name(), values.join(",")));
@@ -207,13 +273,71 @@ fn report(rows: &[Row], measure: Measure) -> Result<(), Error> {
     Ok(())
 }
 
+/// Per arm and bin: sightings, pooled predicted and actual chance of food,
+/// and the per-seed bias (predicted − actual) with its 90% interval.
+fn report_calibration(rows: &[Row]) -> Result<(), Error> {
+    println!("calibration on eaten squares back in view, by steps since last in view:");
+    for (a, arm) in ARMS.iter().enumerate() {
+        println!("   {}:", arm.name());
+        for (b, name) in BIN_NAMES.iter().enumerate() {
+            let bins: Vec<Bin> = rows.iter().map(|r| r.2[a][b]).collect();
+            let seen: u32 = bins.iter().map(|x| x.seen).sum();
+            if seen == 0 {
+                println!("      {name}: no sightings");
+                continue;
+            }
+            let predicted = bins.iter().map(|x| x.predicted).sum::<f64>() / f64::from(seen);
+            let food = f64::from(bins.iter().map(|x| x.food).sum::<u32>()) / f64::from(seen);
+            let biases: Vec<f64> = bins
+                .iter()
+                .filter(|x| x.seen > 0)
+                .map(|x| (x.predicted - f64::from(x.food)) / f64::from(x.seen))
+                .collect();
+            let bias = match Interval::mean(&biases) {
+                Ok(i) => format!(
+                    "{:+.3} [{:+.3}, {:+.3}] over {} seeds",
+                    i.mid,
+                    i.lo,
+                    i.hi,
+                    biases.len()
+                ),
+                Err(_) => format!("too few seeds ({})", biases.len()),
+            };
+            println!(
+                "      {name}: {seen} sightings, predicted {predicted:.3}, actual {food:.3}, bias {bias}"
+            );
+        }
+    }
+    Ok(())
+}
+
+fn calibration_csv(rows: &[Row]) -> String {
+    let mut out = String::from("seed,arm,bin,seen,predicted_sum,food\n");
+    for (seed, _, bins) in rows {
+        for (arm, per_bin) in ARMS.iter().zip(bins) {
+            for (name, b) in BIN_NAMES.iter().zip(per_bin) {
+                out.push_str(&format!(
+                    "{seed},{},{name},{},{},{}\n",
+                    arm.name(),
+                    b.seen,
+                    b.predicted,
+                    b.food
+                ));
+            }
+        }
+    }
+    out
+}
+
 fn execute(args: &Args) -> Result<(), Error> {
     let rows = rows(&args.seeds)?;
     for measure in MEASURES {
         report(&rows, measure)?;
     }
+    report_calibration(&rows)?;
     fs::create_dir_all(&args.out)?;
     fs::write(args.out.join("decline.csv"), csv(&rows))?;
+    fs::write(args.out.join("calibration.csv"), calibration_csv(&rows))?;
     Ok(())
 }
 
