@@ -168,6 +168,8 @@ pub struct Apprentice<M = PredictiveCoding> {
     told: HashMap<Pos, Word>,
     /// What each word has turned out to mean.
     lexicon: HashMap<Word, Belief>,
+    /// The square whose value made its last move the best one.
+    goal: Option<Pos>,
 }
 
 /// Meaning of a word on its first check, before what was seen is learned.
@@ -195,6 +197,7 @@ impl<M: WorldModel> Apprentice<M> {
             surprise: 0.0,
             told: HashMap::new(),
             lexicon: HashMap::new(),
+            goal: None,
         }
     }
 
@@ -207,6 +210,13 @@ impl<M: WorldModel> Apprentice<M> {
         self.surprise = 0.0;
         self.told.clear();
         self.lexicon.clear();
+    }
+
+    /// The square its last move headed for: the planner's best square
+    /// through that first step. `None` after eating or resting, or a move
+    /// with no plan.
+    pub fn goal(&self) -> Option<Pos> {
+        self.goal
     }
 
     /// Its model, to change from outside (for experiments that wipe it).
@@ -313,8 +323,9 @@ impl<M: WorldModel> Apprentice<M> {
         hunger * food / self.drives.scale
     }
 
-    /// Best discounted utility reachable through each first step.
-    fn plan(&self, obs: &Observation, hunger: f64) -> [Option<f64>; 4] {
+    /// Best discounted utility reachable through each first step, and the
+    /// square it is reached at.
+    fn plan(&self, obs: &Observation, hunger: f64) -> [Option<(f64, Pos)>; 4] {
         let d = &self.drives;
         let mut best = [None; 4];
         let mut done: HashSet<Pos> = HashSet::new();
@@ -344,7 +355,9 @@ impl<M: WorldModel> Apprentice<M> {
                 reach * self.utility(n.at, hunger) - n.cost
             };
             let slot = &mut best[n.first];
-            *slot = Some(slot.map_or(value, |v: f64| v.max(value)));
+            if slot.is_none_or(|(v, _)| value > v) {
+                *slot = Some((value, n.at));
+            }
             if n.steps >= d.horizon {
                 continue;
             }
@@ -378,28 +391,29 @@ impl<M: WorldModel> Apprentice<M> {
         if d.sweep {
             // A sweeping plan counts every meal on its way, so eating here
             // counts the sweep that can follow it.
-            let after = plans.iter().flatten().fold(0.0_f64, |m, &v| m.max(v));
+            let after = plans.iter().flatten().fold(0.0_f64, |m, &(v, _)| m.max(v));
             eat_value += d.discount * after;
         }
         let mut options = vec![
-            (Action::Rest, Tried::Rest, self.valence.rest / d.scale),
-            (Action::Eat, Tried::Eat(here), eat_value),
+            (Action::Rest, Tried::Rest, self.valence.rest / d.scale, None),
+            (Action::Eat, Tried::Eat(here), eat_value, None),
         ];
         for (i, dir) in Dir::ALL.into_iter().enumerate() {
             let target = kind(obs.toward(dir));
-            let value = match plans[i] {
-                Some(v) => v,
-                None => self.valence.enter[target] / d.scale,
+            let (value, goal) = match plans[i] {
+                Some((v, at)) => (v, Some(at)),
+                None => (self.valence.enter[target] / d.scale, None),
             };
-            options.push((Action::Move(dir), Tried::Enter(target), value));
+            options.push((Action::Move(dir), Tried::Enter(target), value, goal));
         }
-        let mut best = (Action::Rest, Tried::Rest, f64::NEG_INFINITY);
-        for (action, tried, value) in options {
+        let mut best = (Action::Rest, Tried::Rest, f64::NEG_INFINITY, None);
+        for (action, tried, value, goal) in options {
             let jittered = value + 1e-9 * self.rng.unit();
             if jittered > best.2 {
-                best = (action, tried, jittered);
+                best = (action, tried, jittered, goal);
             }
         }
+        self.goal = best.3;
         (best.0, best.1)
     }
 }
@@ -711,6 +725,20 @@ mod tests {
         a.lexicon.insert(FOOD_WORD.word, one_hot(Cell::Food));
         a.hear(Pos { x: 0, y: -4 }, FOOD_WORD);
         assert_eq!(a.act(&open(20)), Action::Move(Dir::North));
+    }
+
+    #[test]
+    fn its_goal_is_the_square_it_heads_for_and_none_after_resting() {
+        let mut a = taught(0.0);
+        a.lexicon.insert(FOOD_WORD.word, one_hot(Cell::Food));
+        let food = Pos { x: 0, y: -4 };
+        a.hear(food, FOOD_WORD);
+        assert_eq!(a.act(&open(20)), Action::Move(Dir::North));
+        assert_eq!(a.goal(), Some(food));
+        let mut full = taught(0.0);
+        full.valence.rest = 50.0;
+        assert_eq!(full.act(&open(100)), Action::Rest);
+        assert_eq!(full.goal(), None);
     }
 
     #[test]
