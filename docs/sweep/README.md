@@ -149,3 +149,48 @@ Means per life, A against each:
 
 The diagnosis above used seeds 101–140, 30 of which are judging seeds; it
 looked only at today's apprentice, not at either fix.
+
+## Results (seeds 1–100 and 111–210, one run each)
+
+`cargo run --release --bin sweep -- --judge` ([judging.txt](judging.txt),
+[sweep.csv](sweep.csv)), about 85 minutes on 4 cores, and `cargo run
+--release --bin hope_steps -- --judge` ([hope_steps.txt](hope_steps.txt),
+[hope_steps.csv](hope_steps.csv)), about 20 minutes. The judging run's
+binary predates the bush-false-hopes column, so it has none.
+
+| Rule | A → S, means per life (raw change) | Change [90%] | Verdict |
+|---|---|---|---|
+| 1. Barren test sleeps ≤ −25% | 56.3 → 46.5 (−9.8) | −24% [−28%, −20%] | **unclear** |
+| 2. Barren upbringing sleeps ≤ −25% | 95.9 → 62.8 (−33.1) | −36% [−39%, −34%] | **met** |
+| 3a. Bush test sleeps ≤ +10% | 14.2 → 9.4 (−4.8) | −35% [−40%, −30%] | **met** |
+| 3b. Bush upbringing sleeps ≤ +10% | 32.7 → 23.2 (−9.5) | −30% [−34%, −27%] | **met** |
+| 3c. Barren false hopes ≤ +10% | 1.7 → 3.3 (+1.6) | +42% [+22%, +65%] | **missed** |
+| 3d. Home-test wrong (100 steps) ≤ +10% | 0.6 → 0.5 (−0.1) | −2% [−7%, +4%] | **met** |
+| 3b′. Extra wasted steps − ½ sleep steps saved ≤ 0, per 1,000 | wasted +0.61, saved 30.5 | −14.6 [−16.4, −12.8] steps | **met** |
+| 4. Barren world 5 vs world 1 (S), per 1,000 steps ≤ +0% | 12.9 → 23.3 sleeps | +87% [+71%, +105%] | **missed** |
+
+Rule 4 for A (not judged): 21.1 → 28.2 sleeps per 1,000 steps, +33%
+[+30%, +36%].
+
+Each arm's costs (3b′): A wastes 0.58 steps per false hope and loses 3.78
+steps per sleep; S wastes 0.49 and loses 3.27. Barren test meals 32.5 →
+64.1; bush test meals 279 → 291; barren futile returns 13.1 → 5.2.
+
+## What it shows
+
+- **The root cause was the patterns' clock.** Judging a square by how
+  long since it changed, not since it was last seen, made every square
+  out of sight look empty in a world where food pops up anywhere. With
+  time unseen, plus plans that add up food along the way, the apprentice
+  eats twice as much in the barren test world, sleeps a third less across
+  the barren upbringing, and does better in bush worlds too.
+- **False hopes rise but cost almost nothing.** 1.6 more per barren
+  world, which misses the 10% mark; but most are noticed in passing, so
+  they waste 0.6 extra steps per 1,000 against 30 steps saved on sleeps.
+- **Experience still makes barren worlds harder**, with or without the
+  fix. The fix helps the first barren world most (sleeps 21.1 → 12.9), so
+  the gap to the test world grows. Something learned in between still
+  hurts there; not yet understood.
+- **Barren test sleeps** fell 24%, a hair short of the 25% mark (unclear).
+
+Defaults unchanged: `PatternNet::unseen` and `Drives::sweep` stay off.

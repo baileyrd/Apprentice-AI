@@ -1,0 +1,3 @@
+3b'. extra steps wasted on false hopes less half the sleep steps saved, per 1,000 steps: -14.61 [-16.37, -12.84]: met
+   A: false hopes 1.69, wasted 0.98, W 0.58 steps per false hope; sleeps 56.3, lost 212.8, S 3.78 steps per sleep (means per life)
+   S: false hopes 3.27, wasted 1.59, W 0.49 steps per false hope; sleeps 46.5, lost 151.9, S 3.27 steps per sleep (means per life)
