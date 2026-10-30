@@ -177,3 +177,69 @@ choosing which set applies; context units kept.
 - **Stop rule (Nano's).** If gating misses matching, stop: merge the world
   and the controls, and write up "memory isn't the bottleneck,
   computation is."
+
+## Second-try results
+
+**Turning, fresh seeds 21–40 (3-of-8 look rule): met for every memory.**
+
+| Memory   | One-ahead | Two-ahead | After stares ≥ 5 | Probe | Seeds passing |
+|----------|-----------|-----------|------------------|-------|---------------|
+| None     | 1.00      | 1.00      | 1.00             | 1.00  | 20/20         |
+| Recent 3 | 1.00      | 1.00      | 0.97             | 1.00  | 20/20         |
+| Context  | 1.00      | 1.00      | 1.00             | 1.00  | 20/20         |
+| Gated    | 1.00      | 1.00      | 1.00             | 0.82  | 20/20         |
+
+**Matching, fresh seeds 41–60: missed for every memory, gating included.**
+
+| Memory   | One-ahead | Two-ahead | After stares ≥ 5 | Probe | Probe, matching box | Seeds passing |
+|----------|-----------|-----------|------------------|-------|---------------------|---------------|
+| None     | 0.74      | 0.72      | 0.75             | 0.79  | 0.64                | 0/20          |
+| Recent 3 | 0.75      | 0.75      | 0.75             | 0.86  | 0.70                | 0/20          |
+| Context  | 0.74      | 0.73      | 0.75             | 0.85  | 0.67                | 0/20          |
+| Gated    | 0.75      | 0.75      | 0.75             | 0.66  | 0.49                | 0/20          |
+
+On tuning seeds gating reached 0.78 at most (rates 0.02–0.1, up to
+100,000 steps), so the miss is not a budget the judging run cut short.
+
+The probe on matching-box turns sits above 50% even with no memory
+(0.64). The likely reason, not checked: over the last 100 such turns the
+body tends to spend longer near one of the two, so always guessing that
+one beats a coin. Read it against the no-memory row, not against 50%.
+Against that row, recent 3 and context carry a little heading (+0.03 to
++0.06); gating carries less (its hidden code changes with each motor, which
+a single linear probe reads poorly).
+
+## Write-up: memory isn't the bottleneck, computation is
+
+Per Nano's stop rule, gating missed, so this line of work stops here; the
+world and the controls are merged as they are.
+
+What the five-box world showed:
+
+1. **Motor learning is easy.** With raw noisy senses and unlabelled,
+   shuffled motors, every learner (no memory included) learns what each
+   motor does and predicts the next view at 100% within 8,000 steps, on
+   40 judged seeds.
+2. **Heading is not.** When two opposite boxes look alike, no learner
+   beats the no-memory ceiling of about 75%, on 40 judged seeds and up to
+   400,000 tuning steps.
+3. **The memory was there.** The recent-3 control holds the deciding
+   history verbatim for every stare of 2 or less, and a lookup table on
+   (last view, last motor, view, motor) is exact. Context units carry a
+   trace too: the probe reads slightly more heading from them than from no
+   memory. Yet prediction stays at chance on matching boxes.
+4. **What is missing is the computation.** The next view after a matching
+   box flips with three facts at once (where it came from, the motor that
+   brought it, the motor it fires now): a three-way parity. Neither local
+   predictive coding nor backprop (in the same network, and in a separate
+   numpy check) learns it from this data within the budgets. Gating, which
+   takes the current motor out of what the hidden layer has to combine,
+   didn't change that either, because the other two facts still have to
+   be combined across steps, and nothing teaches the hidden layer to keep
+   heading (no backprop through time).
+
+What would test this next, not built: a learner that keeps heading as its
+own state, updated by the motor (path integration on a ring), so that
+prediction needs only heading × motor, which every learner here already
+solves. That would be giving the apprentice a heading sense, a design
+choice for Nano, like the offset it already gets in the grid world.
