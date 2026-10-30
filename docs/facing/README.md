@@ -367,3 +367,34 @@ integration of steps, like the ring for turns). That would make walking
 a two-way combination again, and probably pass, but it would also mean
 giving the apprentice, built in, every fact it fails to keep. Whether to
 do that or to look for a learner that keeps state is Nano's call.
+
+## A learner that keeps state, step 1: GRU ceiling check (rules fixed before any run)
+
+Nano's direction (2026-10-30): no innate place sense; find a learner that
+keeps state. First, a ceiling check: can any recurrent network, trained
+the usual way, do walking? If not, stop and report.
+
+- **Learner.** A small GRU, 32 hidden units, written here (no ML library),
+  comparison only like `Learning::Backprop`. Input: the percept (8 sensed
+  numbers + the 4 ring units) and the motor one-hot (4). Output: the next
+  percept, read out linearly from the new hidden state. Trained **offline
+  with backprop through time**: the 40,000-step walking life is recorded,
+  then replayed in order for 20 epochs, in chunks of 40 steps (hidden
+  state carried across chunks, gradients cut at chunk edges), Adam at rate
+  0.003, gradients clipped to norm 1. Squared error on the next percept.
+- **World and life.** Walking + ring, as judged above. After training, the
+  same world goes on for 4,000 more steps with the GRU frozen, and that is
+  what is scored.
+- **Scoring.** As before, on non-stare steps of the 4,000: one-ahead and
+  two-ahead over the last 100, after stares ≥ 5 over all of them. Two-ahead
+  feeds its own predicted percept (ring included) back in.
+- **Place probe.** A linear probe for where it stands (centre or which side
+  box), trained by delta rule on the hidden states of one frozen replay of
+  the training life, then scored on the last 100 scored steps.
+- **Marks** (same as walking): one-ahead ≥ 95%, two-ahead ≥ 90%, after
+  stares ≥ 5 ≥ 90%, in ≥ 19 of seeds 101–120.
+- **Tuning**: if needed, only on seeds 201–205, disclosed. A gradient check
+  against finite differences is a test.
+- **Stop rule (Nano's):** if it misses, stop and report. Only if it passes
+  comes step 2: a recurrent net with e-prop-style eligibility traces, online
+  and local, with its own rules committed first and fresh seeds.
