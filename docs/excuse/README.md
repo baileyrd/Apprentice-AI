@@ -143,9 +143,10 @@ the gap (N − A strangers −0.155 [−0.202, −0.108] against the gap of
 **The guess was wrong.** I expected N to barely differ from A, because
 the PR #34 probe found the home map's error on map-judged squares in
 wrong stranger trials was 0.23, under `misfit`. On fresh seeds N removes
-about half of the stranger errors that X removes. The probe's 0.23 was a
-mean over the trial; a running error that starts low and crosses 0.3
-part way through is enough to withdraw the excuse in many trials.
+about half of the stranger errors that X removes. A possible reason,
+not checked: the probe's 0.23 was a mean over whole trials on another
+commit, and a running error that crosses 0.3 for part of a trial is
+enough to withdraw the excuse then.
 
 ## What this does not change
 
