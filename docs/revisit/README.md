@@ -183,3 +183,47 @@ seeds 1–100 and 141–240.
    whole interval below 0%, and none of the seven rises with the whole
    interval above +10%. Otherwise they add nothing, and I propose removing
    both (deleting needs Nano's OK).
+
+## Follow-up results (seeds 1–100 and 141–240)
+
+### 1. Patrol + walk to visible food
+
+`patrol --seek --against docs/revisit/revisit.csv` ([seek.txt](seek.txt),
+[seek.csv](seek.csv)). Per 1,000 steps:
+
+| | Barren sleeps | Barren meals | Bush sleeps | Bush meals |
+|---|---|---|---|---|
+| Plain patroller | 34.2 | 10.7 | 22.0 | 34.1 |
+| Seeking patroller | 4.2 | 98.9 | 8.8 | 60.3 |
+| A (no revisit) | 28.1 | 16.4 | 3.7 | 69.4 |
+| R (revisit 1/128) | 2.8 | 71.8 | 2.0 | 73.1 |
+
+Seeking patroller minus R: barren sleeps +1.4 [+0.4, +2.4], barren meals
++27.0 [+23.8, +30.2], bush sleeps +6.8 [+6.4, +7.3], bush meals −12.8
+[−13.8, −11.7].
+
+Walking to food it can see is what the plain patroller lacked: in barren
+worlds it gets close to R (4.2 against 2.8 sleeps) and eats more (99
+against 72, above the 80 break-even). R still sleeps less in both worlds,
+and much less in bush worlds (2.0 against 8.8), where knowing which
+squares grow back pays.
+
+### 2. Revisit + time-unseen + path-counting (RUS) against revisit alone (R)
+
+`revisit --extras` ([extras.txt](extras.txt), [extras.csv](extras.csv)):
+
+| Measure | RUS vs R | Raw difference |
+|---|---|---|
+| Barren test sleeps/1k | −27% [−30%, −23%] | −0.81 [−1.02, −0.60] |
+| Barren test meals/1k | +2% [+1%, +3%] | +1.83 [+1.42, +2.24] |
+| Bush test sleeps | −23% [−26%, −19%] | −1.44 [−2.18, −0.69] |
+| Bush upbringing sleeps | −35% [−37%, −33%] | −8.28 [−8.73, −7.83] |
+| Barren upbringing sleeps | −50% [−52%, −48%] | −10.6 [−11.3, −9.9] |
+| Home-test wrong (100 steps) | +13% [+6%, +20%] | +0.24 [+0.13, +0.35] |
+| RUS barren test vs its first barren world | −12% [−19%, −4%] | −0.54 [−0.98, −0.10] |
+
+By the reading fixed above, **they add something**: every sleep count falls
+with the whole interval below 0, and no measure rises by more than 10% for
+sure. The home test is the one cost: +13%, interval [+6%, +20%], about one
+more wrong answer every four seeds. So no removal is proposed. Making RUS
+the default would need its own marks and judging seeds.
