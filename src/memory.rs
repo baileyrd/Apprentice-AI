@@ -30,11 +30,9 @@
 //! happen to look familiar do not wipe out the evidence of being elsewhere.
 //! While in doubt, what it senses is held in the diary rather than written
 //! into the map in use, so a strange place cannot be learned into home's map
-//! while it is still deciding. A bush it ate from is judged by when patterns
-//! say it grows back: an expected change is no sign of being somewhere else.
-//! By default ([`Excuse::Never`]) that excuse is not granted: every square
-//! is judged by the map, so a stranger's empty squares cannot hide behind
-//! it.
+//! while it is still deciding. Every square is judged by the map, a bush it
+//! ate from too: excusing an empty eaten square as "not grown back yet" let
+//! strangers pass for home (docs/excuse).
 //!
 //! A full diary forces a nap: the same consolidation, without world time.
 //! Every update is a local delta rule; nothing is trained end to end.
@@ -111,24 +109,6 @@ pub struct Recall {
     /// network budget split between changes and non-changes in the day's
     /// proportions.
     pub fair_mix: bool,
-    /// When a square it ate from is judged by when patterns say it grows
-    /// back, instead of by the map.
-    pub excuse: Excuse,
-}
-
-/// When an eaten square's sighting is excused by expected regrowth in
-/// judging a map's fit.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Excuse {
-    /// Whenever patterns have a guess (PR #11; the default until card #565).
-    Always,
-    /// Never: every square is judged by the map. The default since card
-    /// #565.
-    #[default]
-    Never,
-    /// Only while the rest of the map fits: its running error over
-    /// sightings judged by the map alone is at most `Recall::misfit`.
-    WhileFit,
 }
 
 /// Selective sleep for the patterns: today's most "surprising" entries,
@@ -202,7 +182,6 @@ impl Default for Recall {
             replay_budget: None,
             net_replay: None,
             fair_mix: false,
-            excuse: Excuse::Never,
         }
     }
 }
@@ -329,9 +308,6 @@ struct Context {
     /// it rests on.
     fit: f64,
     samples: usize,
-    /// The same running error over sightings judged by the map alone.
-    plain_fit: f64,
-    plain_samples: usize,
     /// How each square last changed, when, and when it was last sensed.
     seen: HashMap<Pos, Seen>,
 }
@@ -343,43 +319,23 @@ impl Context {
             stiffness: HashMap::new(),
             fit: 0.0,
             samples: 0,
-            plain_fit: 0.0,
-            plain_samples: 0,
             seen: HashMap::new(),
         }
     }
 
-    /// Scores the map on one sighting; `expected` overrides the map where
-    /// a known change (a bush growing back) says what to expect instead.
-    fn judge(&mut self, at: Pos, sensed: Cell, rate: f64, expected: Option<Belief>) {
+    /// Scores the map on one sighting.
+    fn judge(&mut self, at: Pos, sensed: Cell, rate: f64) {
         if !self.map.knows(at) {
             return;
         }
-        let e = match expected {
-            Some(b) => error(&b, sensed),
-            None => {
-                let e = error(&self.map.predict(at), sensed);
-                running(&mut self.plain_fit, &mut self.plain_samples, rate, e);
-                e
-            }
+        let e = error(&self.map.predict(at), sensed);
+        self.fit = if self.samples == 0 {
+            e
+        } else {
+            self.fit + rate * (e - self.fit)
         };
-        running(&mut self.fit, &mut self.samples, rate, e);
+        self.samples += 1;
     }
-
-    /// Whether the map fits on the sightings it judged by itself.
-    fn fits_plainly(&self, misfit: f64) -> bool {
-        self.plain_fit <= misfit
-    }
-}
-
-/// Moves a running mean toward `e`; the first sample sets it.
-fn running(mean: &mut f64, samples: &mut usize, rate: f64, e: f64) {
-    *mean = if *samples == 0 {
-        e
-    } else {
-        *mean + rate * (e - *mean)
-    };
-    *samples += 1;
 }
 
 /// The phase 4 world model: diary over context maps.
@@ -768,7 +724,6 @@ impl Memory {
         self.active = to;
         for ctx in &mut self.contexts {
             ctx.samples = 0;
-            ctx.plain_samples = 0;
         }
         self.lost = 0;
     }
@@ -872,25 +827,8 @@ impl WorldModel for Memory {
         };
         self.contexts[self.active].seen.insert(at, next);
         let rate = self.recall.fit_rate;
-        // A bush it ate from is judged by when it should grow back, not by
-        // the map: an expected change is no sign of being somewhere else.
-        // Narrowed, only while the rest of that map fits.
-        let (active, patterns, r) = (self.active, &self.patterns, self.recall);
-        for (i, ctx) in self.contexts.iter_mut().enumerate() {
-            let state = if i == active {
-                before
-            } else {
-                ctx.seen.get(&at).copied()
-            };
-            let excused = match r.excuse {
-                Excuse::Always => true,
-                Excuse::Never => false,
-                Excuse::WhileFit => ctx.fits_plainly(r.misfit),
-            };
-            let expected = state
-                .filter(|s| r.patterns && excused && s.last == Last::Ate)
-                .and_then(|s| patterns.predict(s.last, t - s.since, s.said));
-            ctx.judge(at, sensed, rate, expected);
+        for ctx in &mut self.contexts {
+            ctx.judge(at, sensed, rate);
         }
         surprise
     }
@@ -1283,12 +1221,9 @@ mod tests {
         assert!(m.contexts[0].map.knows(far));
     }
 
-    /// How much the active map's fit rises when a bush eaten 40 steps ago
-    /// is seen grown back, with `excuse`, and the map's error on squares it
-    /// judged alone set to `plain` (`None`: as lived).
-    fn regrowth_rise(patterns: bool, excuse: Excuse, plain: Option<f64>) -> f64 {
-        let mut m = no_naps(patterns);
-        m.recall.excuse = excuse;
+    #[test]
+    fn a_regrowth_counts_against_the_map_even_with_patterns() {
+        let mut m = no_naps(true);
         for i in 0..MEALS {
             eat_and_watch(&mut m, Pos { x: 10 * i, y: 0 });
             m.sleep();
@@ -1301,56 +1236,12 @@ mod tests {
         m.sleep();
         let ate = Seen::new(Last::Ate, m.t - 40);
         m.contexts[0].seen.insert(bush, ate);
-        if let Some(e) = plain {
-            m.contexts[0].plain_fit = e;
-            m.contexts[0].plain_samples = 1;
-        }
         let before = m.contexts[0].fit;
         let mut v = [Cell::Empty; VIEW * VIEW];
         v[Observation::CENTER] = Cell::Food;
         m.observe(&at(bush, v));
-        m.contexts[0].fit - before
-    }
-
-    #[test]
-    fn an_expected_regrowth_is_no_sign_of_being_elsewhere() {
-        let without = regrowth_rise(false, Excuse::Always, None);
-        let with = regrowth_rise(true, Excuse::Always, None);
-        assert!(without > 0.02, "without patterns: {without}");
-        assert!(with < 0.01, "with patterns: {with}");
-    }
-
-    #[test]
-    fn by_default_no_regrowth_is_excused() {
-        assert_eq!(Recall::default().excuse, Excuse::Never);
-        assert_eq!(Excuse::default(), Excuse::Never);
-    }
-
-    #[test]
-    fn with_the_excuse_off_a_regrowth_counts_against_the_map() {
-        let rise = regrowth_rise(true, Excuse::Never, None);
-        assert!(rise > 0.02, "excuse off: {rise}");
-    }
-
-    #[test]
-    fn the_narrow_excuse_holds_only_while_the_rest_of_the_map_fits() {
-        let fits = regrowth_rise(true, Excuse::WhileFit, Some(0.1));
-        let misfits = regrowth_rise(true, Excuse::WhileFit, Some(0.5));
-        assert!(fits < 0.01, "rest fits: {fits}");
-        assert!(misfits > 0.02, "rest misfits: {misfits}");
-    }
-
-    #[test]
-    fn only_map_judged_sightings_move_the_plain_fit() {
-        let mut ctx = Context::new(PredictiveCoding::new(Rates::default()));
-        let at = ORIGIN;
-        ctx.map.learn(at, Cell::Empty);
-        ctx.judge(at, Cell::Empty, 0.5, None);
-        let plain = ctx.plain_fit;
-        ctx.judge(at, Cell::Food, 0.5, Some(one_hot(Cell::Food)));
-        assert_eq!(ctx.plain_fit, plain, "an excused sighting moved it");
-        assert_eq!(ctx.plain_samples, 1);
-        assert_eq!(ctx.samples, 2);
+        let rise = m.contexts[0].fit - before;
+        assert!(rise > 0.02, "regrowth excused: {rise}");
     }
 
     fn gated(span: usize) -> Memory {
