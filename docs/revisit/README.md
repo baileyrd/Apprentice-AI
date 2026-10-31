@@ -115,3 +115,49 @@ Hopeful trips go from 6–19 to about 200 per 1,000 steps: it patrols.
    from the world's settings: cost of a step resting and moving, energy per
    meal, and the meals per 1,000 steps that would pay for walking every
    step (break-even), next to each arm's measured meals.
+
+## Results (seeds 1–100 and 141–240, one run)
+
+`cargo run --release --bin revisit -- --judge 0.0078125` prints
+[judging.txt](judging.txt) and writes [revisit.csv](revisit.csv).
+
+| Mark | R vs A | Raw difference | Verdict |
+|---|---|---|---|
+| 1. Barren test sleeps/1k ≤ −10% | −88% [−88%, −87%] | −25.3 [−25.7, −25.0] (28.1 → 2.8) | **met** |
+| 2. Barren test meals/1k ≥ +10% | +366% [+341%, +392%] | +55.5 [+54.5, +56.4] (16.4 → 71.8) | **met** |
+| 3. R barren test vs first barren world ≤ 0% | −58% [−60%, −56%] | −5.0 [−5.4, −4.6] (7.8 → 2.8) | **met** |
+| 4a. Bush test sleeps ≤ +10% | −35% [−40%, −29%] | −6.8 [−9.0, −4.6] (14.8 → 8.0) | **met** |
+| 4b. Bush upbringing sleeps ≤ +10% | −21% [−25%, −18%] | −8.3 [−9.8, −6.8] | **met** |
+| 4c. Barren upbringing sleeps ≤ +10% | −77% [−77%, −76%] | −73.6 [−74.7, −72.5] | **met** |
+| 4d. Home-test wrong (100 steps) ≤ +10% | +1% [−5%, +7%] | +0.01 [−0.09, +0.11] | **met** |
+
+Reported only, R vs A: barren false hopes −3% (1.7 → 1.4), bush false
+hopes +55% (2.8 → 4.8), bush meals +14% (277 → 292), barren futile eating
+−84% (13.6 → 2.0).
+
+All marks met. With revisit, experience helps in barren worlds: the test
+world (2.8 sleeps per 1,000 steps) is easier than its first barren world
+(7.8). Without it, the test world was harder (28.1 against 20.9).
+
+### Patroller and energy (reported only)
+
+`cargo run --release --bin patrol -- --against runs/revisit/revisit.csv`
+([patrol.txt](patrol.txt), [patrol.csv](patrol.csv)).
+
+Both world types charge and pay the same: a step costs 1 resting or eating,
+2 walking (12 into a hazard), and a meal gives 25. Walking every step
+breaks even at 80 meals per 1,000 steps.
+
+Per 1,000 steps:
+
+| | Barren sleeps | Barren meals | Bush sleeps | Bush meals |
+|---|---|---|---|---|
+| Patroller | 34.2 | 10.7 | 22.0 | 34.1 |
+| A (default) | 28.1 | 16.4 | 3.7 | 69.4 |
+| R (revisit 1/128) | 2.8 | 71.8 | 2.0 | 73.1 |
+
+The patroller is worse than both in both worlds: it eats only what it
+happens to stand on, and never steps toward food it can see. R's meals sit
+just under break-even for walking every step (72 of 80), so R barely runs
+down. Patrolling alone is not what R learned: R patrols *and* goes for food
+it sees or expects.

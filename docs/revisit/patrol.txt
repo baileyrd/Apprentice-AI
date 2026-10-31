@@ -1,0 +1,15 @@
+barren: a step costs 1 resting or eating, 2 walking (12 into a hazard); a meal gives 25; walking every step breaks even at 80 meals per 1,000 steps
+bush: a step costs 1 resting or eating, 2 walking (12 into a hazard); a meal gives 25; walking every step breaks even at 80 meals per 1,000 steps
+patroller, per 1,000 steps (mean [90%]):
+   barren: sleeps 34.19 [33.85, 34.52], meals 10.68 [10.06, 11.30]
+   bush: sleeps 22.01 [21.22, 22.79], meals 34.08 [32.51, 35.65]
+patroller minus A, per 1,000 steps, paired by seed:
+   barren_sleeps_per_1k: A 28.10, difference +6.08 [+5.64, +6.53] over 200 seeds
+   barren_meals_per_1k: A 16.38, difference -5.71 [-6.74, -4.67] over 200 seeds
+   bush_sleeps: A 3.71, difference +18.30 [+17.32, +19.28] over 200 seeds
+   bush_meals: A 69.37, difference -35.29 [-37.32, -33.26] over 200 seeds
+patroller minus R128, per 1,000 steps, paired by seed:
+   barren_sleeps_per_1k: R128 2.79, difference +31.40 [+31.05, +31.75] over 200 seeds
+   barren_meals_per_1k: R128 71.83, difference -61.16 [-61.78, -60.53] over 200 seeds
+   bush_sleeps: R128 2.00, difference +20.01 [+19.23, +20.79] over 200 seeds
+   bush_meals: R128 73.09, difference -39.00 [-40.55, -37.46] over 200 seeds
