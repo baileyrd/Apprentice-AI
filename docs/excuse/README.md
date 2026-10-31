@@ -155,3 +155,32 @@ Nano's OK, and a flip would go in its own PR. Choosing between N and X
 is a trade: X gets fewer wrong answers overall by a margin too small to
 detect here (0.05 per test), and it pays for that with home trials
 answered wrong. N keeps home almost as well as today.
+
+## What each error costs (reported only)
+
+Asked by Nano when the narrower excuse became the default. For every
+home-test trial on seeds 501–700, the trial runs on for 1,000 steps
+after the answer is read at step 100, counting sleeps and meals. A wrong
+answer is compared with right answers in the same kind of place (home or
+changed home; stranger). Each trial is the same as in the judging run up
+to step 100: the counts of wrong answers match it exactly. No interval
+is computed; this is a description, not a mark.
+
+`cargo run --release --example error_cost -- 501 700` →
+[error_cost.csv](error_cost.csv).
+
+| Arm | Error | Trials wrong | Sleeps/1k, wrong − right | Meals/1k, wrong − right |
+|---|---|---|---|---|
+| A | stranger taken as home | 119 | −0.11 (1.34 vs 1.46) | +0.15 (75.5 vs 75.4) |
+| X | stranger taken as home | 59 | +0.44 (1.86 vs 1.42) | −1.65 (73.9 vs 75.5) |
+| N | stranger taken as home | 88 | −0.46 (1.03 vs 1.49) | +0.93 (76.2 vs 75.3) |
+| A | home taken as stranger | 0 | — | — |
+| X | home taken as stranger | 21 | +0.05 (0.81 vs 0.75) | +1.43 (77.3 vs 75.9) |
+| N | home taken as stranger | 2 | +22.8 (23.5 vs 0.67) | −32.1 (44.0 vs 76.1) |
+
+Reading: a stranger taken as home costs nothing visible in sleeps or
+meals over the next 1,000 steps, in any arm (differences under half a
+sleep). A home taken as a stranger also costs nothing under X (21
+trials). N's two missed homes were costly (23.5 sleeps and 44 meals per
+1,000 steps, against 0.7 and 76), but two trials are anecdotes: why
+they went badly is not checked.
