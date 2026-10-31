@@ -58,6 +58,9 @@ sets them; `home_why` output is byte-identical with and without it
 
 ## Results
 
+All results below were measured at c16c8bc, where path-counting and
+time-unseen still existed, not on main.
+
 ### Attribution (seeds 301–500, one run, the reading fixed above)
 
 Wrong answers per home test (0–5) at 100 steps. Every extra wrong answer,
@@ -149,4 +152,10 @@ Merged as docs only. Path-counting and the regrowth excuse both stay for
 now. Next: a narrower excuse (an eaten square is excused only while the
 rest of the map fits), with marks and thresholds written before running,
 judged on fresh seeds (501+) against today's default and against the
-excuse-off arm. If it does not close the gap, revisit path-counting.
+excuse-off arm.
+
+Update (Nano, 2026-10-31): that test runs on main, where path-counting is
+gone, with three arms: main's default, excuse off, narrower excuse.
+Bringing path-counting back would be its own card, opened only if someone
+wants it, and it would have to pass the home test with the narrower
+excuse in place.
