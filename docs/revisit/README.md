@@ -161,3 +161,25 @@ happens to stand on, and never steps toward food it can see. R's meals sit
 just under break-even for walking every step (72 of 80), so R barely runs
 down. Patrolling alone is not what R learned: R patrols *and* goes for food
 it sees or expects.
+
+## Follow-ups (Nano, 2026-10-31), fixed before running
+
+Revisit 1/128 is now the default. Both runs below are reported only, on
+seeds 1–100 and 141–240.
+
+1. **Patrol + walk to visible food**, no learning: the patroller above,
+   except that when food is in view and not underfoot it steps toward the
+   nearest food in view (fewest steps, through squares that are neither
+   walls nor hazards; ties broken north, east, south, west). Barren and
+   bush test worlds. Reported against A (no revisit) and R (revisit 1/128)
+   from [revisit.csv](revisit.csv), as paired raw differences per 1,000
+   steps.
+2. **Revisit + time-unseen + path-counting (RUS) against revisit alone
+   (R)**, in the whole life. `PatternNet::unseen` and `Drives::sweep` on,
+   with revisit 1/128. Measures: the seven used in the marks above, as
+   paired change and raw difference with 90% intervals.
+   **They add something** if at least one of barren test sleeps, bush test
+   sleeps, barren upbringing sleeps or bush upbringing sleeps falls with the
+   whole interval below 0%, and none of the seven rises with the whole
+   interval above +10%. Otherwise they add nothing, and I propose removing
+   both (deleting needs Nano's OK).
