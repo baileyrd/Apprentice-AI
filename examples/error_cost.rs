@@ -27,6 +27,8 @@ const ARMS: [(&str, Excuse); 3] = [
 /// right, and sleeps and meals over the next `AFTER` steps.
 #[derive(Debug, Clone, Copy)]
 struct Trial {
+    seed: u64,
+    place: Place,
     arm: usize,
     home: bool,
     right: bool,
@@ -42,6 +44,8 @@ fn trial(arm: usize, place: Place, seed: u64) -> Result<Trial, SimError> {
     let (mut mind, home, home_map) = at_home_as(recall, Drives::default(), seed)?;
     let mut sim = world(place, &home, seed);
     let mut t = Trial {
+        seed,
+        place,
         arm,
         home: place.is_home(),
         right: false,
@@ -142,6 +146,28 @@ fn report(trials: &[Trial]) {
     }
 }
 
+/// Every home or changed-home trial some arm answered wrong, with each
+/// arm's answer, sleeps and meals over the same steps.
+fn missed(trials: &[Trial]) {
+    println!("seed,place,arm,right,sleeps,meals");
+    let wrong = trials.iter().filter(|t| t.home && !t.right);
+    let mut keys: Vec<(u64, Place)> = wrong.map(|t| (t.seed, t.place)).collect();
+    keys.sort_by_key(|k| (k.0, k.1.name()));
+    keys.dedup();
+    for (seed, place) in keys {
+        for t in trials.iter().filter(|t| t.seed == seed && t.place == place) {
+            println!(
+                "{seed},{},{},{},{},{}",
+                place.name(),
+                ARMS[t.arm].0,
+                t.right,
+                t.sleeps,
+                t.meals
+            );
+        }
+    }
+}
+
 fn main() -> ExitCode {
     let args: Vec<u64> = std::env::args()
         .skip(1)
@@ -155,6 +181,7 @@ fn main() -> ExitCode {
     match run(&seeds) {
         Ok(trials) => {
             report(&trials);
+            missed(&trials);
             ExitCode::SUCCESS
         }
         Err(e) => {

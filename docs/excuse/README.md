@@ -184,3 +184,22 @@ sleep). A home taken as a stranger also costs nothing under X (21
 trials). N's two missed homes were costly (23.5 sleeps and 44 meals per
 1,000 steps, against 0.7 and 76), but two trials are anecdotes: why
 they went badly is not checked.
+
+### The same missed-home trials in every arm
+
+Nano asked whether N's missed homes are bad because of the world. The
+probe now also lists every home or changed-home trial some arm answered
+wrong, with all three arms on the same seed and world (second block of
+[error_cost.csv](error_cost.csv); summary rows unchanged on rerun).
+
+| Seed, place | A sleeps (meals) | X sleeps (meals) | N sleeps (meals) |
+|---|---|---|---|
+| 571, changed home (N wrong) | 0 (79) | 0 (77) | **47 (11)** |
+| 586, changed home (N wrong) | 0 (76) | 0 (78) | 0 (77) |
+
+Only one of N's two missed homes was bad, and it was bad only under N:
+the same world cost the other arms nothing. The 23.5 mean above is that
+one trial (47 sleeps) averaged with a free one. Of X's 21 missed homes,
+the only costly one (seed 684) was about as costly in every arm (4–7
+sleeps), so that is the world. Why seed 571 went so badly under N is not
+checked; it is one trial.
