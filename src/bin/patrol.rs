@@ -12,14 +12,13 @@ use apprentice::patroller::Patroller;
 use apprentice::sim::{Config, Event, Sim, SimError};
 
 const USAGE: &str = "\
-usage: patrol [--seek] [--against CSV] [--out DIR]
+usage: patrol [--against CSV] [--out DIR]
 
 Lives the patroller in the barren and bush test worlds of seeds 1-100 and
 141-240. Prints energy per step and per meal for each world type, the
 patroller's sleeps and meals per 1,000 steps and, with --against (a
 revisit.csv from `revisit --judge`), the paired raw difference to each of
-its settings. --seek: the patroller also walks to food in view. Writes
-DIR/patrol.csv (default DIR: runs/patrol).";
+its settings. Writes DIR/patrol.csv (default DIR: runs/patrol).";
 
 type Error = Box<dyn std::error::Error>;
 
@@ -30,13 +29,9 @@ struct Rates {
     meals: f64,
 }
 
-fn patrol(config: Config, seed: u64, steps: usize, seek: bool) -> Result<Rates, SimError> {
+fn patrol(config: Config, seed: u64, steps: usize) -> Result<Rates, SimError> {
     let mut sim = Sim::new(config, seed)?;
-    let mut p = if seek {
-        Patroller::seeking()
-    } else {
-        Patroller::new()
-    };
+    let mut p = Patroller::new();
     let (mut sleeps, mut meals) = (0u32, 0u32);
     for _ in 0..steps {
         let outcome = sim.step(p.act(&sim.observe()));
@@ -67,13 +62,13 @@ fn energy(name: &str, config: &Config) {
 /// Per seed: barren and bush rates.
 type Row = (u64, Rates, Rates);
 
-fn rows(seeds: &[u64], seek: bool) -> Result<Vec<Row>, SimError> {
+fn rows(seeds: &[u64]) -> Result<Vec<Row>, SimError> {
     let (dry, wet) = (barren(), bushes());
     seeds
         .iter()
         .map(|&s| {
-            let b = patrol(dry.clone(), s + test_offset(&dry), BARREN_STEPS, seek)?;
-            let w = patrol(wet.clone(), s + test_offset(&wet), BUSH_STEPS, seek)?;
+            let b = patrol(dry.clone(), s + test_offset(&dry), BARREN_STEPS)?;
+            let w = patrol(wet.clone(), s + test_offset(&wet), BUSH_STEPS)?;
             Ok((s, b, w))
         })
         .collect()
@@ -154,11 +149,11 @@ fn compare(rows: &[Row], csv: &str) -> Result<(), Error> {
     Ok(())
 }
 
-fn execute(against_csv: Option<PathBuf>, out: PathBuf, seek: bool) -> Result<(), Error> {
+fn execute(against_csv: Option<PathBuf>, out: PathBuf) -> Result<(), Error> {
     energy("barren", &barren());
     energy("bush", &bushes());
     let seeds: Vec<u64> = (1..=100).chain(141..=240).collect();
-    let rows = rows(&seeds, seek)?;
+    let rows = rows(&seeds)?;
     let col = |f: fn(&Row) -> f64| rows.iter().map(f).collect::<Vec<f64>>();
     println!("patroller, per 1,000 steps (mean [90%]):");
     println!(
@@ -195,8 +190,7 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
     let (mut against_csv, mut out) = (None, PathBuf::from("runs/patrol"));
-    let seek = raw.iter().any(|a| a == "--seek");
-    let mut it = raw.iter().filter(|a| *a != "--seek");
+    let mut it = raw.iter();
     while let Some(flag) = it.next() {
         let Some(value) = it.next() else {
             eprintln!("{flag} needs a value\n\n{USAGE}");
@@ -211,7 +205,7 @@ fn main() -> ExitCode {
             }
         }
     }
-    if let Err(e) = execute(against_csv, out, seek) {
+    if let Err(e) = execute(against_csv, out) {
         eprintln!("patrol: {e}");
         return ExitCode::FAILURE;
     }
