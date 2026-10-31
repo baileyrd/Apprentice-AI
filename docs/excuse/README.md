@@ -148,9 +148,17 @@ not checked: the probe's 0.23 was a mean over whole trials on another
 commit, and a running error that crosses 0.3 for part of a trial is
 enough to withdraw the excuse then.
 
-## What this does not change
+## Decision (Nano, 2026-10-31): the narrower excuse is the default
 
-`Excuse::Always` stays the default. Nothing becomes a default without
+`Excuse::WhileFit` is the default from the PR that flips it (its own PR,
+revert it alone to undo). Mark 1 stayed unclear (0.440 against the 0.445
+target, interval straddles); switching anyway because N beats the old
+default on total wrong (−0.145 [−0.194, −0.096]) with homes missed at
+0.010 and no change in sleeps. Mark 1 measured ambition, not safety.
+
+## What PR #36 did not change
+
+At PR #36, `Excuse::Always` stayed the default. Nothing becomes a default without
 Nano's OK, and a flip would go in its own PR. Choosing between N and X
 is a trade: X gets fewer wrong answers overall by a margin too small to
 detect here (0.05 per test), and it pays for that with home trials
