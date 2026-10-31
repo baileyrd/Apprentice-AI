@@ -97,9 +97,6 @@ pub struct PatternNet {
     /// answers are corrected back by the same weights; `None` teaches every
     /// sample alike.
     pub rare: Option<f64>,
-    /// Whether it also sees how long a square has gone unseen, so a square
-    /// out of sight for long can be expected to have changed.
-    pub unseen: bool,
 }
 
 impl Default for PatternNet {
@@ -110,7 +107,6 @@ impl Default for PatternNet {
             rate: 0.2,
             seed: 0,
             rare: None,
-            unseen: false,
         }
     }
 }
@@ -127,21 +123,12 @@ const NET_LEARNING: Learning = Learning::PredictiveCoding {
     precision: 100.0,
 };
 
-/// A count of steps as one smooth number from 0 to 1.
-fn smooth(steps: u64) -> f64 {
-    ((steps.max(1) as f64).log2() / AGES as f64).min(1.0)
-}
-
-/// What the network sees of a square in state `last`, `age` steps old,
-/// and, if it looks, `unseen` steps out of sight.
-fn features(last: Last, age: u64, unseen: Option<u64>) -> Vec<f64> {
+/// What the network sees of a square in state `last`, `age` steps old.
+fn features(last: Last, age: u64) -> Vec<f64> {
     let mut x = vec![0.0; FEATURES];
     x[last.index()] = 1.0;
     x[STATES + age_group(age)] = 1.0;
-    x[FEATURES - 1] = smooth(age);
-    if let Some(unseen) = unseen {
-        x.push(smooth(unseen));
-    }
+    x[FEATURES - 1] = ((age.max(1) as f64).log2() / AGES as f64).min(1.0);
     x
 }
 
@@ -174,8 +161,6 @@ pub struct Patterns {
     /// rare outcomes teach harder.
     outcomes: [[u32; KINDS]; STATES],
     rare: Option<f64>,
-    /// Whether the network sees how long a square has gone unseen.
-    unseen: bool,
 }
 
 /// How much rarer outcome `k` is than an even share of `seen`: between 1
@@ -225,7 +210,6 @@ impl Patterns {
             trust: HashMap::new(),
             outcomes: [[0; KINDS]; STATES],
             rare: None,
-            unseen: false,
         }
     }
 
@@ -233,11 +217,7 @@ impl Patterns {
     /// table. Word patterns stay a table.
     pub fn with_net(rate: f64, min: u32, net: PatternNet) -> Self {
         let size = |n: usize| NonZeroUsize::new(n).unwrap_or(NonZeroUsize::MIN);
-        let sizes = [
-            size(FEATURES + usize::from(net.unseen)),
-            net.hidden,
-            size(KINDS),
-        ];
+        let sizes = [size(FEATURES), net.hidden, size(KINDS)];
         Self {
             general: Store::Net(Box::new(Net::one_hidden(
                 sizes,
@@ -246,7 +226,6 @@ impl Patterns {
                 net.seed,
             ))),
             rare: net.rare,
-            unseen: net.unseen,
             ..Self::new(rate, min)
         }
     }
@@ -256,13 +235,12 @@ impl Patterns {
         self.trust.get(&voice).copied().unwrap_or(STRANGER)
     }
 
-    /// A square in state `last`, `age` steps old, last seen `unseen` steps
-    /// ago, and told `said` if anything, was seen as `sensed`.
-    pub fn learn(&mut self, last: Last, age: u64, unseen: u64, said: Option<Said>, sensed: Cell) {
+    /// A square in state `last`, `age` steps old, and told `said` if
+    /// anything, was seen as `sensed`.
+    pub fn learn(&mut self, last: Last, age: u64, said: Option<Said>, sensed: Cell) {
         if let Some(said) = said {
-            self.judge(last, age, unseen, said, sensed);
+            self.judge(last, age, said, sensed);
         }
-        let unseen = self.unseen.then_some(unseen);
         let (state, group) = (last.index(), age_group(age));
         let count = &mut self.counts[state][group];
         *count = count.saturating_add(1);
@@ -277,7 +255,7 @@ impl Patterns {
             Store::Net(net) => {
                 let seen = &mut self.outcomes[state];
                 let weight = self.rare.map_or(1.0, |cap| rarity(seen, kind(sensed), cap));
-                net.learn_weighted(&features(last, age, unseen), &one_hot(sensed), weight);
+                net.learn_weighted(&features(last, age), &one_hot(sensed), weight);
                 seen[kind(sensed)] = seen[kind(sensed)].saturating_add(1);
             }
         }
@@ -293,8 +271,8 @@ impl Patterns {
     /// Where the word of `said` and the general pattern disagree about what
     /// is most likely, moves trust in its speaker by whether the word was
     /// right about `sensed`.
-    fn judge(&mut self, last: Last, age: u64, unseen: u64, said: Said, sensed: Cell) {
-        let general = self.general(last, age, unseen);
+    fn judge(&mut self, last: Last, age: u64, said: Said, sensed: Cell) {
+        let general = self.general(last, age);
         let (Some(general), Some(told)) = (general, self.foretold(last, age, said)) else {
             return;
         };
@@ -307,12 +285,11 @@ impl Patterns {
         *trust += TRUST_RATE * (hit - *trust);
     }
 
-    /// What a square in state `last`, `age` steps old, last seen `unseen`
-    /// steps ago, and told `said` if anything, is now: the general pattern
-    /// moved toward the word's pattern by trust in the speaker; `None` until
-    /// a pattern has enough samples.
-    pub fn predict(&self, last: Last, age: u64, unseen: u64, said: Option<Said>) -> Option<Belief> {
-        let general = self.general(last, age, unseen);
+    /// What a square in state `last`, `age` steps old, and told `said` if
+    /// anything, is now: the general pattern moved toward the word's pattern
+    /// by trust in the speaker; `None` until a pattern has enough samples.
+    pub fn predict(&self, last: Last, age: u64, said: Option<Said>) -> Option<Belief> {
+        let general = self.general(last, age);
         let Some((said, told)) = said.and_then(|s| Some((s, self.foretold(last, age, s)?))) else {
             return general;
         };
@@ -325,7 +302,7 @@ impl Patterns {
 
     /// What the general pattern alone says; `None` until it has enough
     /// samples.
-    fn general(&self, last: Last, age: u64, unseen: u64) -> Option<Belief> {
+    fn general(&self, last: Last, age: u64) -> Option<Belief> {
         let (state, group) = (last.index(), age_group(age));
         if self.counts[state][group] < self.min {
             return None;
@@ -333,8 +310,7 @@ impl Patterns {
         Some(match &self.general {
             Store::Table(table) => table[state][group],
             Store::Net(net) => {
-                let unseen = self.unseen.then_some(unseen);
-                let b = as_belief(&net.predict(&features(last, age, unseen)));
+                let b = as_belief(&net.predict(&features(last, age)));
                 self.rare
                     .map_or(b, |cap| corrected(b, &self.outcomes[state], cap))
             }
@@ -388,9 +364,9 @@ mod tests {
         );
         for i in 0..400 {
             let seen = if i % 10 == 5 { Cell::Food } else { Cell::Empty };
-            p.learn(Last::Ate, 40, 40, None, seen);
+            p.learn(Last::Ate, 40, None, seen);
         }
-        p.predict(Last::Ate, 40, 40, None)
+        p.predict(Last::Ate, 40, None)
             .map_or(0.0, |b| b[kind(Cell::Food)])
     }
 
@@ -413,8 +389,8 @@ mod tests {
             let sensed = if grows { Cell::Food } else { Cell::Empty };
             let truth = said(1, if grows { 4 } else { 5 });
             let noise = said(2, if i % 3 == 0 { 4 } else { 5 });
-            p.learn(Last::Ate, 40, 40, Some(truth), sensed);
-            p.learn(Last::Ate, 40, 40, Some(noise), sensed);
+            p.learn(Last::Ate, 40, Some(truth), sensed);
+            p.learn(Last::Ate, 40, Some(noise), sensed);
         }
         assert!(p.trust(honest) > 0.9, "{}", p.trust(honest));
         assert!(p.trust(random) < 0.6, "{}", p.trust(random));
@@ -433,11 +409,11 @@ mod tests {
     #[test]
     fn a_pattern_is_silent_until_it_has_enough_samples() {
         let mut p = Patterns::new(0.1, 3);
-        p.learn(Last::Ate, 40, 40, None, Cell::Food);
-        p.learn(Last::Ate, 40, 40, None, Cell::Food);
-        assert_eq!(p.predict(Last::Ate, 40, 40, None), None);
-        p.learn(Last::Ate, 50, 50, None, Cell::Food); // same age group
-        assert!(p.predict(Last::Ate, 40, 40, None).is_some());
+        p.learn(Last::Ate, 40, None, Cell::Food);
+        p.learn(Last::Ate, 40, None, Cell::Food);
+        assert_eq!(p.predict(Last::Ate, 40, None), None);
+        p.learn(Last::Ate, 50, None, Cell::Food); // same age group
+        assert!(p.predict(Last::Ate, 40, None).is_some());
     }
 
     #[test]
@@ -445,16 +421,16 @@ mod tests {
         let mut p = Patterns::new(0.1, 5);
         for _ in 0..50 {
             for age in 1..30 {
-                p.learn(Last::Ate, age, age, None, Cell::Empty);
+                p.learn(Last::Ate, age, None, Cell::Empty);
             }
             for age in 32..64 {
-                p.learn(Last::Ate, age, age, None, Cell::Food);
+                p.learn(Last::Ate, age, None, Cell::Food);
             }
         }
-        let food = |age| p.predict(Last::Ate, age, age, None).expect("learned")[kind(Cell::Food)];
+        let food = |age| p.predict(Last::Ate, age, None).expect("learned")[kind(Cell::Food)];
         assert!(food(5) < 0.1, "{}", food(5));
         assert!(food(40) > 0.9, "{}", food(40));
-        assert_eq!(p.predict(Last::Saw(Cell::Empty), 40, 40, None), None);
+        assert_eq!(p.predict(Last::Saw(Cell::Empty), 40, None), None);
     }
 
     fn net(hidden: usize, rate: f64) -> PatternNet {
@@ -463,31 +439,30 @@ mod tests {
             rate,
             seed: 1,
             rare: None,
-            unseen: false,
         }
     }
 
     #[test]
     fn a_network_learns_regrowth_too_and_keeps_the_evidence_gate() {
         let mut p = Patterns::with_net(0.1, 5, net(16, 0.05));
-        p.learn(Last::Ate, 40, 40, None, Cell::Food);
+        p.learn(Last::Ate, 40, None, Cell::Food);
         assert_eq!(
-            p.predict(Last::Ate, 40, 40, None),
+            p.predict(Last::Ate, 40, None),
             None,
             "one sample is not enough"
         );
         for _ in 0..200 {
             for age in 1..30 {
-                p.learn(Last::Ate, age, age, None, Cell::Empty);
+                p.learn(Last::Ate, age, None, Cell::Empty);
             }
             for age in 32..64 {
-                p.learn(Last::Ate, age, age, None, Cell::Food);
+                p.learn(Last::Ate, age, None, Cell::Food);
             }
         }
-        let food = |age| p.predict(Last::Ate, age, age, None).expect("learned")[kind(Cell::Food)];
+        let food = |age| p.predict(Last::Ate, age, None).expect("learned")[kind(Cell::Food)];
         assert!(food(5) < 0.1, "{}", food(5));
         assert!(food(40) > 0.9, "{}", food(40));
-        let b = p.predict(Last::Ate, 40, 40, None).expect("learned");
+        let b = p.predict(Last::Ate, 40, None).expect("learned");
         assert!((b.iter().sum::<f64>() - 1.0).abs() < 1e-9 && b.iter().all(|&x| x >= 0.0));
     }
 
@@ -502,10 +477,10 @@ mod tests {
         let (back, gone) = (said(0, 4), said(0, 5));
         let mut p = Patterns::new(0.1, 5);
         for _ in 0..50 {
-            p.learn(Last::Ate, 40, 40, Some(back), Cell::Food);
-            p.learn(Last::Ate, 40, 40, Some(gone), Cell::Empty);
+            p.learn(Last::Ate, 40, Some(back), Cell::Food);
+            p.learn(Last::Ate, 40, Some(gone), Cell::Empty);
         }
-        let food = |w| p.predict(Last::Ate, 40, 40, w).expect("learned")[kind(Cell::Food)];
+        let food = |w| p.predict(Last::Ate, 40, w).expect("learned")[kind(Cell::Food)];
         assert!(food(Some(back)) > 0.9, "{}", food(Some(back)));
         assert!(food(Some(gone)) < 0.1, "{}", food(Some(gone)));
         let general = food(None);
@@ -516,12 +491,12 @@ mod tests {
     fn an_unlearned_word_falls_back_to_the_general_pattern() {
         let mut p = Patterns::new(0.1, 5);
         for _ in 0..10 {
-            p.learn(Last::Ate, 40, 40, None, Cell::Food);
+            p.learn(Last::Ate, 40, None, Cell::Food);
         }
-        p.learn(Last::Ate, 40, 40, Some(said(0, 9)), Cell::Empty);
+        p.learn(Last::Ate, 40, Some(said(0, 9)), Cell::Empty);
         assert_eq!(
-            p.predict(Last::Ate, 40, 40, Some(said(0, 9))),
-            p.predict(Last::Ate, 40, 40, None)
+            p.predict(Last::Ate, 40, Some(said(0, 9))),
+            p.predict(Last::Ate, 40, None)
         );
     }
 }
