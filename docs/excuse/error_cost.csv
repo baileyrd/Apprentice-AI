@@ -17,3 +17,73 @@ N,home,wrong-right,,+22.83,-32.12
 N,stranger,right,512,1.49,75.26
 N,stranger,wrong,88,1.03,76.19
 N,stranger,wrong-right,,-0.46,+0.93
+seed,place,arm,right,sleeps,meals
+508,changed home,A,true,0,78
+508,changed home,X,false,0,78
+508,changed home,N,true,0,78
+509,changed home,A,true,0,78
+509,changed home,X,false,0,78
+509,changed home,N,true,0,78
+519,changed home,A,true,8,61
+519,changed home,X,false,0,77
+519,changed home,N,true,8,61
+519,home,A,true,0,78
+519,home,X,false,0,78
+519,home,N,true,0,78
+529,home,A,true,0,80
+529,home,X,false,1,77
+529,home,N,true,0,80
+540,changed home,A,true,0,78
+540,changed home,X,false,0,79
+540,changed home,N,true,0,78
+549,changed home,A,true,0,79
+549,changed home,X,false,0,80
+549,changed home,N,true,0,79
+556,changed home,A,true,0,79
+556,changed home,X,false,0,80
+556,changed home,N,true,0,78
+564,changed home,A,true,1,75
+564,changed home,X,false,0,79
+564,changed home,N,true,0,78
+571,changed home,A,true,0,79
+571,changed home,X,true,0,77
+571,changed home,N,false,47,11
+586,changed home,A,true,0,76
+586,changed home,X,true,0,78
+586,changed home,N,false,0,77
+591,changed home,A,true,0,79
+591,changed home,X,false,0,79
+591,changed home,N,true,0,79
+592,changed home,A,true,0,79
+592,changed home,X,false,0,79
+592,changed home,N,true,0,79
+603,changed home,A,true,0,76
+603,changed home,X,false,0,79
+603,changed home,N,true,0,76
+605,changed home,A,true,0,78
+605,changed home,X,false,0,80
+605,changed home,N,true,0,78
+605,home,A,true,0,79
+605,home,X,false,0,78
+605,home,N,true,0,79
+618,changed home,A,true,0,80
+618,changed home,X,false,1,76
+618,changed home,N,true,0,80
+618,home,A,true,0,75
+618,home,X,false,0,77
+618,home,N,true,0,75
+656,home,A,true,0,78
+656,home,X,false,1,75
+656,home,N,true,0,78
+663,changed home,A,true,0,79
+663,changed home,X,false,0,80
+663,changed home,N,true,0,79
+676,changed home,A,true,0,83
+676,changed home,X,false,1,77
+676,changed home,N,true,0,83
+684,changed home,A,true,4,76
+684,changed home,X,false,6,70
+684,changed home,N,true,4,76
+684,home,A,true,4,74
+684,home,X,false,7,68
+684,home,N,true,4,74
