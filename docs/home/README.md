@@ -62,6 +62,8 @@ Three changes to memory, each a local rule, with no world label or cue:
 3. **An eaten bush growing back is expected.** For a square it ate from,
    the map is judged by what patterns say (it grows back after a while), not
    by the map alone.
+   *Removed 2026-10-31 (docs/excuse, #37 and its follow-up): it let
+   strangers pass for home, and every square is now judged by the map.*
 
 **Tuning, disclosed.** On seeds 101–110 I also tried a higher misfit line
 (0.35 to 0.5), a misfit line set by each map's usual error, and judging only

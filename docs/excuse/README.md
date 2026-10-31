@@ -1,5 +1,16 @@
 # A narrower regrowth excuse
 
+> **Superseded (2026-10-31).** The regrowth excuse is gone. #37 made
+> excuse-off (`Excuse::Never`) the default; the error-cost checks in #38
+> and #39 showed both error types near-free; the follow-up PR deleted
+> `Excuse`, `plain_fit` and the regrowth-judged `expected` in `judge`.
+> Every square is now judged by the map. The last commit containing the
+> excuse code, `bin excuse` and `examples/error_cost.rs` is **2bf8f1c**:
+> to rerun anything below, check out that commit. Deleting it changed no
+> output under the default: [default_lives.rs](default_lives.rs) printed
+> byte-identical lives (default and gate-on, seeds 1–8, sha256
+> `f9ce2247…45de`) at 2bf8f1c and after the deletion.
+
 Card #565 (Mill Board, project apprentice_ai). Diagnosis only: no default
 changes here.
 
@@ -84,7 +95,7 @@ judged by the map was 0.23, below `misfit`, so the rest of the map
 already "fits" there and N will usually still grant the excuse. Marks 0,
 3 and 4 met.
 
-## How to run
+## How to run (at 2bf8f1c)
 
 ```sh
 cargo run --release --bin excuse            # seeds 501-700, all three arms
@@ -156,11 +167,11 @@ but N beat the old default on total wrong (−0.145 [−0.194, −0.096]) with
 homes missed at 0.010 and no change in sleeps; mark 1 measured ambition,
 not safety.
 
-Then Nano's rule on the error-cost check: if N's missed homes are bad in
-every arm, it is the world; if only under N, excuse-off becomes the
-default. Only N was bad (seed 571: 47 sleeps under N, 0 under A and X;
-see the error-cost section), so `Excuse::Never` is the default from the PR that flips it
-(its own PR; revert it alone to undo). Against the old default, X has
+Then, after the error-cost checks, excuse-off (`Excuse::Never`) became the
+default instead (#37). Why: a tie with N on total wrong (X − N +0.050
+[−0.029, +0.129]); both error types near-free over the next 1,000 steps;
+and simpler, since the excuse code can go. Seed 571 (N's one costly
+missed home) is n = 1 and not the reason. Against the old default, X has
 total wrong −0.195 [−0.287, −0.103], homes missed +0.105, and no
 detectable change in sleeps.
 
@@ -182,7 +193,7 @@ changed home; stranger). Each trial is the same as in the judging run up
 to step 100: the counts of wrong answers match it exactly. No interval
 is computed; this is a description, not a mark.
 
-`cargo run --release --example error_cost -- 501 700` →
+At 2bf8f1c: `cargo run --release --example error_cost -- 501 700` →
 [error_cost.csv](error_cost.csv).
 
 | Arm | Error | Trials wrong | Sleeps/1k, wrong − right | Meals/1k, wrong − right |
