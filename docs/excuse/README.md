@@ -159,7 +159,7 @@ not safety.
 Then Nano's rule on the error-cost check: if N's missed homes are bad in
 every arm, it is the world; if only under N, excuse-off becomes the
 default. Only N was bad (seed 571: 47 sleeps under N, 0 under A and X;
-the error-cost section), so `Excuse::Never` is the default from the PR that flips it
+see the error-cost section), so `Excuse::Never` is the default from the PR that flips it
 (its own PR; revert it alone to undo). Against the old default, X has
 total wrong −0.195 [−0.287, −0.103], homes missed +0.105, and no
 detectable change in sleeps.
