@@ -154,8 +154,8 @@ pub fn raise(
     Ok((mind, raised))
 }
 
-/// Seed offset of the new world like `next` after an upbringing.
-fn offset(next: &Config) -> u64 {
+/// Seed offset of the new (test) world like `next` after an upbringing.
+pub fn test_offset(next: &Config) -> u64 {
     if next.regrowth == Regrowth::Anywhere {
         5_000
     } else {
@@ -175,7 +175,7 @@ pub fn barren_test_watched(
     watch: impl FnMut(&Learner, &Sim, &Outcome, Pos),
 ) -> Result<Stay, SimError> {
     let next = barren();
-    let seed = seed + offset(&next);
+    let seed = seed + test_offset(&next);
     live_watched(mind, next, seed, BARREN_STEPS, watch)
 }
 
@@ -188,7 +188,7 @@ fn upbringing_then(
     steps: usize,
 ) -> Result<([Stay; RAISED], Stay), SimError> {
     let (mut mind, raised) = raise(setting, seed, &next)?;
-    let seed = seed + offset(&next);
+    let seed = seed + test_offset(&next);
     Ok((raised, live(&mut mind, next, seed, steps)?))
 }
 

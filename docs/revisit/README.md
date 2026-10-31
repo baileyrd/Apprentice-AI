@@ -104,7 +104,8 @@ Hopeful trips go from 6–19 to about 200 per 1,000 steps: it patrols.
 1. **A hand-coded patroller**, no learning, in the same test worlds (barren
    test: seed + 5000, 2,000 steps; bush test: seed + 6000, 4,000 steps) on
    the same seeds. It eats when it stands on food. Otherwise it walks the
-   shortest path, through squares it has seen and are not walls, toward the
+   shortest path, through squares it has seen and that are neither walls
+   nor hazards, toward the
    square it has gone longest without seeing among those it can reach
    (never-seen squares next to known open ones count as unseen forever;
    ties go to the nearest, then to a fixed order). It remembers what each
