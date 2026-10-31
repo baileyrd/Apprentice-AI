@@ -36,7 +36,8 @@ Only that value is judged.
 
 ## Marks, fixed before judging
 
-Judged once on seeds 1–100 and 111–210, **R** (the tuned `revisit`) against
+Judged once on seeds 1–100 and 141–240 (Nano, 2026-10-31: 111–140 were
+used in the decline diagnosis), **R** (the tuned `revisit`) against
 **A** (today's default), paired by seed, 90% interval, `apprentice::judge`.
 Raw differences are reported next to percentages.
 
@@ -97,3 +98,19 @@ Without revisit the experienced apprentice slept 28.4 and the newborn 25.0
 on these seeds. With revisit both sleep about a tenth as much, and **the
 decline reverses**: experience now helps (−33% sleeps against a newborn).
 Hopeful trips go from 6–19 to about 200 per 1,000 steps: it patrols.
+
+## Alongside the judging, not marks (Nano, 2026-10-31), fixed before running
+
+1. **A hand-coded patroller**, no learning, in the same test worlds (barren
+   test: seed + 5000, 2,000 steps; bush test: seed + 6000, 4,000 steps) on
+   the same seeds. It eats when it stands on food. Otherwise it walks the
+   shortest path, through squares it has seen and are not walls, toward the
+   square it has gone longest without seeing among those it can reach
+   (never-seen squares next to known open ones count as unseen forever;
+   ties go to the nearest, then to a fixed order). It remembers what each
+   square looked like when last seen; it learns nothing about values.
+   Reported: sleeps and meals per 1,000 steps, against A and R.
+2. **Energy cost per step against energy per meal** in each world type,
+   from the world's settings: cost of a step resting and moving, energy per
+   meal, and the meals per 1,000 steps that would pay for walking every
+   step (break-even), next to each arm's measured meals.

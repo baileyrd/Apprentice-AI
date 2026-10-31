@@ -16,7 +16,7 @@ usage: revisit [--judge RATE] [--out DIR]
 
 Without --judge: tuning on seeds 101-110, today's default against revisit
 1/64, 1/128, 1/256 and 1/512, and the rate the tuning rule picks. With
---judge RATE: the judging seeds 1-100 and 111-210, today's default (A)
+--judge RATE: the judging seeds 1-100 and 141-240, today's default (A)
 against revisit RATE (R), and each mark's verdict. Writes DIR/revisit.csv
 (default DIR: runs/revisit).";
 
@@ -195,7 +195,7 @@ fn judge(rows: &[Row]) -> Result<(), Error> {
 
 fn execute(args: &Args) -> Result<(), Error> {
     let (seeds, rates): (Vec<u64>, Vec<f64>) = match args.judge {
-        Some(rate) => ((1..=100).chain(111..=210).collect(), vec![rate]),
+        Some(rate) => ((1..=100).chain(141..=240).collect(), vec![rate]),
         None => ((101..=110).collect(), CANDIDATES.to_vec()),
     };
     let settings: Vec<Setting> = std::iter::once(0.0)
