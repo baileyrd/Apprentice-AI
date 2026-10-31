@@ -32,8 +32,9 @@
 //! into the map in use, so a strange place cannot be learned into home's map
 //! while it is still deciding. A bush it ate from is judged by when patterns
 //! say it grows back: an expected change is no sign of being somewhere else.
-//! By default ([`Excuse::WhileFit`]) that excuse holds only while the rest
-//! of the map fits, so a stranger's empty squares cannot hide behind it.
+//! By default ([`Excuse::Never`]) that excuse is not granted: every square
+//! is judged by the map, so a stranger's empty squares cannot hide behind
+//! it.
 //!
 //! A full diary forces a nap: the same consolidation, without world time.
 //! Every update is a local delta rule; nothing is trained end to end.
@@ -121,12 +122,12 @@ pub struct Recall {
 pub enum Excuse {
     /// Whenever patterns have a guess (PR #11; the default until card #565).
     Always,
-    /// Never: every square is judged by the map.
+    /// Never: every square is judged by the map. The default since card
+    /// #565.
+    #[default]
     Never,
     /// Only while the rest of the map fits: its running error over
     /// sightings judged by the map alone is at most `Recall::misfit`.
-    /// The default since card #565.
-    #[default]
     WhileFit,
 }
 
@@ -201,7 +202,7 @@ impl Default for Recall {
             replay_budget: None,
             net_replay: None,
             fair_mix: false,
-            excuse: Excuse::WhileFit,
+            excuse: Excuse::Never,
         }
     }
 }
@@ -1320,9 +1321,9 @@ mod tests {
     }
 
     #[test]
-    fn the_default_excuse_is_the_narrow_one() {
-        assert_eq!(Recall::default().excuse, Excuse::WhileFit);
-        assert_eq!(Excuse::default(), Excuse::WhileFit);
+    fn by_default_no_regrowth_is_excused() {
+        assert_eq!(Recall::default().excuse, Excuse::Never);
+        assert_eq!(Excuse::default(), Excuse::Never);
     }
 
     #[test]

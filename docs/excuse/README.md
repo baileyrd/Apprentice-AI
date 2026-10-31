@@ -148,13 +148,21 @@ not checked: the probe's 0.23 was a mean over whole trials on another
 commit, and a running error that crosses 0.3 for part of a trial is
 enough to withdraw the excuse then.
 
-## Decision (Nano, 2026-10-31): the narrower excuse is the default
+## Decision (Nano, 2026-10-31): excuse off by default
 
-`Excuse::WhileFit` is the default from the PR that flips it (its own PR,
-revert it alone to undo). Mark 1 stayed unclear (0.440 against the 0.445
-target, interval straddles); switching anyway because N beats the old
-default on total wrong (−0.145 [−0.194, −0.096]) with homes missed at
-0.010 and no change in sleeps. Mark 1 measured ambition, not safety.
+First decided: the narrower excuse (`WhileFit`) becomes the default. Mark
+1 stayed unclear (0.440 against the 0.445 target, interval straddles),
+but N beat the old default on total wrong (−0.145 [−0.194, −0.096]) with
+homes missed at 0.010 and no change in sleeps; mark 1 measured ambition,
+not safety.
+
+Then Nano's rule on the error-cost check: if N's missed homes are bad in
+every arm, it is the world; if only under N, excuse-off becomes the
+default. Only N was bad (seed 571: 47 sleeps under N, 0 under A and X;
+the error-cost section), so `Excuse::Never` is the default from the PR that flips it
+(its own PR; revert it alone to undo). Against the old default, X has
+total wrong −0.195 [−0.287, −0.103], homes missed +0.105, and no
+detectable change in sleeps.
 
 ## What PR #36 did not change
 
