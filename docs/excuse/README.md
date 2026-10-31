@@ -93,6 +93,64 @@ cargo run --release --bin excuse            # seeds 501-700, all three arms
 Writes `runs/excuse/excuse.csv` (one row per seed and arm) and prints the
 marks.
 
-## Results
+A smoke and timing run on seeds 1–4 (already used seeds, not judging)
+was made before the judging run, to check the bin; nothing was tuned.
 
-Not yet run.
+## Results (seeds 501–700, one run)
+
+Full output: [judging.txt](judging.txt); per seed and arm:
+[excuse.csv](excuse.csv).
+
+**Means per home test (answers at 100 steps)**
+
+| Arm | Strangers taken as home (0–3) | Homes taken as stranger (0–2) | Total wrong (0–5) |
+|---|---|---|---|
+| A (default) | 0.595 | 0.000 | 0.595 |
+| X (excuse off) | 0.295 | 0.105 | 0.400 |
+| N (narrower) | 0.440 | 0.010 | 0.450 |
+
+**Marks** (raw paired difference, 90% interval; % change next to it)
+
+| Mark | Result | Verdict |
+|---|---|---|
+| 0. Door reproduces: X − A strangers | −0.300 [−0.382, −0.218] (−16%) | **met** |
+| 1. N closes half the gap: (N−A) − ½(X−A) | −0.005 [−0.047, +0.037] | **unclear** |
+| 2. N keeps home: N − A homes as stranger | +0.010 [−0.002, +0.022] (+1%) | **met** |
+| 3. Hard limit: N − A total wrong ≤ +0.25 | −0.145 [−0.194, −0.096] (−8%) | **met** |
+| 4. Bush test sleeps | +0% [−2%, +2%], raw −0.02 | met |
+| 4. Barren test sleeps/1k | +0% [−3%, +3%], raw −0.06 | met |
+| 4. Bush upbringing sleeps | −0% [−1%, +1%], raw −0.05 | met |
+| 4. Barren upbringing sleeps | −0% [−1%, +1%], raw −0.04 | met |
+
+**Reading, as pinned**: marks 0 and 3 met, 2 and 4 met, mark 1
+unclear, so N does not pass the pinned reading. It closes about half
+the gap (N − A strangers −0.155 [−0.202, −0.108] against the gap of
+−0.300), right on the line, and 200 seeds cannot tell which side.
+
+**Reported only**
+
+- N vs A: strangers taken as home −0.155 [−0.202, −0.108]; total wrong
+  −0.145 [−0.194, −0.096]. N is better than today's default on the home
+  test, with no detectable cost to sleeps.
+- X vs A: X removes twice as many stranger errors (−0.300) but costs
+  homes: +0.105 [+0.062, +0.148] homes taken as stranger per test, where
+  A and N almost never miss home. Total wrong −0.195 [−0.287, −0.103].
+- N vs X: N keeps home better (−0.095 [−0.140, −0.050]) and takes more
+  strangers as home (+0.145 [+0.076, +0.214]); total wrong +0.050
+  [−0.029, +0.129], no detectable difference.
+- Neither N nor X changes life sleeps by more than 3% either way.
+
+**The guess was wrong.** I expected N to barely differ from A, because
+the PR #34 probe found the home map's error on map-judged squares in
+wrong stranger trials was 0.23, under `misfit`. On fresh seeds N removes
+about half of the stranger errors that X removes. The probe's 0.23 was a
+mean over the trial; a running error that starts low and crosses 0.3
+part way through is enough to withdraw the excuse in many trials.
+
+## What this does not change
+
+`Excuse::Always` stays the default. Nothing becomes a default without
+Nano's OK, and a flip would go in its own PR. Choosing between N and X
+is a trade: X gets fewer wrong answers overall by a margin too small to
+detect here (0.05 per test), and it pays for that with home trials
+answered wrong. N keeps home almost as well as today.
