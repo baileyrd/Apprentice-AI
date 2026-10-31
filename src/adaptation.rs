@@ -321,7 +321,13 @@ mod tests {
             seed: 5, // a world where it holds food beliefs when the food moves
             ..Setup::for_change(Change::Food)
         };
-        let mut curious = Apprentice::new(Drives::default(), Rates::default(), 5);
+        // Without revisit: a patrolling apprentice sees the food go at once,
+        // so this world holds no stale beliefs to measure.
+        let drives = Drives {
+            revisit: 0.0,
+            ..Drives::default()
+        };
+        let mut curious = Apprentice::new(drives, Rates::default(), 5);
         let t = run(&setup, &mut curious).expect("room");
         assert!(t.first_meal.is_some(), "never ate after the food moved");
         assert!(t.stale > 0, "believed in no food before the move");
