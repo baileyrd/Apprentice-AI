@@ -2,7 +2,7 @@
 //! stands on food; otherwise it walks toward the square it has gone longest
 //! without seeing, among those it can reach through squares it has seen
 //! open. It remembers what each square looked like when last seen and
-//! nothing else.
+//! nothing else. A seeking patroller also steps toward food it can see.
 
 use std::collections::{HashMap, VecDeque};
 
@@ -15,11 +15,21 @@ pub struct Patroller {
     /// Each square seen: how it looked and when.
     seen: HashMap<Pos, (Cell, u64)>,
     t: u64,
+    /// Whether it walks to food in view before patrolling on.
+    seeks_food: bool,
 }
 
 impl Patroller {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// A patroller that steps toward the nearest food in view.
+    pub fn seeking() -> Self {
+        Self {
+            seeks_food: true,
+            ..Self::default()
+        }
     }
 
     /// Looks, then chooses.
@@ -31,6 +41,13 @@ impl Patroller {
         }
         if obs.view[Observation::CENTER] == Cell::Food {
             return Action::Eat;
+        }
+        if let Some(dir) = self
+            .seeks_food
+            .then(|| self.toward_food(obs.offset))
+            .flatten()
+        {
+            return Action::Move(dir);
         }
         match self.first_step(obs.offset) {
             Some(dir) => Action::Move(dir),
@@ -47,6 +64,28 @@ impl Patroller {
         self.seen
             .get(&at)
             .map_or(u64::MAX, |&(_, last)| self.t - last)
+    }
+
+    /// First move of a shortest path through open squares to the nearest
+    /// food in view; ties go north, east, south, west.
+    fn toward_food(&self, from: Pos) -> Option<Dir> {
+        let mut first: HashMap<Pos, Option<Dir>> = HashMap::from([(from, None)]);
+        let mut queue = VecDeque::from([from]);
+        while let Some(at) = queue.pop_front() {
+            for dir in Dir::ALL {
+                let next = at.step(dir);
+                if first.contains_key(&next) || !self.open(next) {
+                    continue;
+                }
+                let step = first[&at].unwrap_or(dir);
+                if self.seen.get(&next) == Some(&(Cell::Food, self.t)) {
+                    return Some(step);
+                }
+                first.insert(next, Some(step));
+                queue.push_back(next);
+            }
+        }
+        None
     }
 
     /// First move of a shortest path to the stalest reachable square: open
@@ -121,6 +160,16 @@ mod tests {
         // Back at x = 1 the west end (x = -1) is stalest: seen at t = 1.
         let action = p.act(&obs(corridor, Pos { x: 1, y: 0 }));
         assert_eq!(action, Action::Move(Dir::West));
+    }
+
+    #[test]
+    fn a_seeking_patroller_walks_to_food_in_view() {
+        let mut view = [Cell::Empty; VIEW * VIEW];
+        view[8] = Cell::Food; // south-east
+        assert_eq!(
+            Patroller::seeking().act(&obs(view, ORIGIN)),
+            Action::Move(Dir::East)
+        );
     }
 
     #[test]
