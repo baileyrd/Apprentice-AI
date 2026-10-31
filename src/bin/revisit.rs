@@ -10,17 +10,14 @@ use apprentice::apprentice::Drives;
 use apprentice::judge::Interval;
 use apprentice::life::{Life, Measure, Setting, lives_under};
 use apprentice::memory::Recall;
-use apprentice::patterns::PatternNet;
 
 const USAGE: &str = "\
-usage: revisit [--judge RATE | --extras] [--out DIR]
+usage: revisit [--judge RATE] [--out DIR]
 
 Without --judge: tuning on seeds 101-110, today's default against revisit
 1/64, 1/128, 1/256 and 1/512, and the rate the tuning rule picks. With
 --judge RATE: the judging seeds 1-100 and 141-240, today's default (A)
-against revisit RATE (R), and each mark's verdict. With --extras: the
-judging seeds, revisit 1/128 alone (R) against it with time-unseen
-patterns and path-counting plans (RUS), reported only. Writes DIR/revisit.csv
+against revisit RATE (R), and each mark's verdict. Writes DIR/revisit.csv
 (default DIR: runs/revisit).";
 
 type Error = Box<dyn std::error::Error>;
@@ -33,15 +30,13 @@ const BUSH_GUARD: f64 = 1.1;
 /// Parsed flags.
 struct Args {
     judge: Option<f64>,
-    extras: bool,
     out: PathBuf,
 }
 
 fn parse(args: &[String]) -> Result<Args, String> {
     let mut judge = None;
     let mut out = PathBuf::from("runs/revisit");
-    let extras = args.iter().any(|a| a == "--extras");
-    let mut it = args.iter().filter(|a| *a != "--extras");
+    let mut it = args.iter();
     while let Some(flag) = it.next() {
         let value = it.next().ok_or(format!("{flag} needs a value"))?;
         match flag.as_str() {
@@ -56,10 +51,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
             _ => return Err(format!("unknown flag: {flag}")),
         }
     }
-    if extras && judge.is_some() {
-        return Err("--judge and --extras exclude each other".into());
-    }
-    Ok(Args { judge, extras, out })
+    Ok(Args { judge, out })
 }
 
 /// Per-seed measures, in CSV column order. Sleeps and meals in the barren
@@ -201,74 +193,7 @@ fn judge(rows: &[Row]) -> Result<(), Error> {
     Ok(())
 }
 
-/// Revisit with time-unseen patterns and path-counting plans.
-fn with_extras(revisit: f64) -> Setting {
-    let recall = Recall {
-        pattern_net: Some(PatternNet {
-            unseen: true,
-            ..PatternNet::default()
-        }),
-        ..Recall::default()
-    };
-    Setting {
-        drives: Drives {
-            revisit,
-            sweep: true,
-            ..Drives::default()
-        },
-        ..Setting::from(recall)
-    }
-}
-
-/// RUS against R on the seven marks' measures, and the reading fixed in
-/// docs/revisit: they add something if a sleep count falls for sure and
-/// none of the seven rises by more than 10% for sure.
-fn extras(rows: &[Row]) -> Result<(), Error> {
-    let (r, rus) = (0, 1);
-    let mut gained = false;
-    let mut harmed = false;
-    println!("RUS vs R, reported only:");
-    for (i, (name, f)) in MEASURES[..7].iter().enumerate() {
-        if i == 2 {
-            continue; // first barren world: an input to mark 3, not a mark
-        }
-        let (c, raw) = pair(&column(rows, r, *f), &column(rows, rus, *f))?;
-        println!("   {name} {}", show(&c, &raw));
-        let sleeps = matches!(
-            *name,
-            "barren_sleeps_per_1k" | "bush_sleeps" | "raised_barren_sleeps" | "raised_bush_sleeps"
-        );
-        gained |= sleeps && c.hi < 0.0;
-        harmed |= c.lo > 0.1;
-    }
-    let (c, raw) = pair(
-        &column(rows, rus, MEASURES[2].1),
-        &column(rows, rus, MEASURES[0].1),
-    )?;
-    println!(
-        "   RUS barren test vs first barren world {}",
-        show(&c, &raw)
-    );
-    let verdict = if gained && !harmed {
-        "they add something"
-    } else {
-        "they add nothing"
-    };
-    println!("reading: {verdict}");
-    Ok(())
-}
-
 fn execute(args: &Args) -> Result<(), Error> {
-    if args.extras {
-        let rate = 1.0 / 128.0;
-        let seeds: Vec<u64> = (1..=100).chain(141..=240).collect();
-        let rows = lives_under(&seeds, &[setting(rate), with_extras(rate)])?;
-        extras(&rows)?;
-        fs::create_dir_all(&args.out)?;
-        let names = ["R".to_string(), "RUS".to_string()];
-        fs::write(args.out.join("extras.csv"), csv(&rows, &names))?;
-        return Ok(());
-    }
     let (seeds, rates): (Vec<u64>, Vec<f64>) = match args.judge {
         Some(rate) => ((1..=100).chain(141..=240).collect(), vec![rate]),
         None => ((101..=110).collect(), CANDIDATES.to_vec()),

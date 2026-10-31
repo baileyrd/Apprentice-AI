@@ -102,9 +102,6 @@ pub struct Drives {
     pub scale: f64,
     /// Energy it expects from eating a kind of square it has never tried.
     pub optimism: f64,
-    /// Whether a plan counts the food on every square of its path, not only
-    /// the best square it reaches: many small chances add up to a search.
-    pub sweep: bool,
     /// Least rate at which a square's staleness grows per step unseen,
     /// whatever volatility it has learned: a square unseen for 1/revisit
     /// steps pulls like one never seen. Zero leaves it to volatility. The
@@ -123,7 +120,6 @@ impl Default for Drives {
             vigilance: 0.01,
             scale: 25.0,
             optimism: 25.0,
-            sweep: false,
             revisit: 1.0 / 128.0,
         }
     }
@@ -319,17 +315,12 @@ impl<M: WorldModel> Apprentice<M> {
     }
 
     fn utility(&self, at: Pos, hunger: f64) -> f64 {
-        self.appetite(at, hunger) + self.drives.curiosity * self.novelty(at)
-    }
-
-    /// What eating at `at` is worth now, in utility.
-    fn appetite(&self, at: Pos, hunger: f64) -> f64 {
         let b = self.model.predict(at);
         let mut food = self.food(&b);
         if let Some(meaning) = self.told.get(&at).and_then(|&w| self.meaning(w)) {
             food += self.food(&meaning);
         }
-        hunger * food / self.drives.scale
+        hunger * food / self.drives.scale + self.drives.curiosity * self.novelty(at)
     }
 
     /// Best discounted utility reachable through each first step, and the
@@ -350,19 +341,13 @@ impl<M: WorldModel> Apprentice<M> {
                 steps: 1,
                 at,
                 first: i,
-                found: d.discount * self.appetite(at, hunger),
             });
         }
         while let Some(n) = heap.pop() {
             if !done.insert(n.at) {
                 continue;
             }
-            let reach = d.discount.powi(n.steps as i32);
-            let value = if d.sweep {
-                n.found + reach * d.curiosity * self.novelty(n.at) - n.cost
-            } else {
-                reach * self.utility(n.at, hunger) - n.cost
-            };
+            let value = d.discount.powi(n.steps as i32) * self.utility(n.at, hunger) - n.cost;
             let slot = &mut best[n.first];
             if slot.is_none_or(|(v, _)| value > v) {
                 *slot = Some((value, n.at));
@@ -377,13 +362,11 @@ impl<M: WorldModel> Apprentice<M> {
                     continue;
                 }
                 let cost = n.cost + self.toll(&b) / d.scale;
-                let reach = d.discount.powi(n.steps as i32 + 1);
                 heap.push(Node {
                     cost,
                     steps: n.steps + 1,
                     at,
                     first: n.first,
-                    found: n.found + reach * self.appetite(at, hunger),
                 });
             }
         }
@@ -395,14 +378,8 @@ impl<M: WorldModel> Apprentice<M> {
         let hunger = self.hunger(obs.energy);
         let here = kind(obs.here());
         let eat = self.valence.eat[here];
-        let mut eat_value = if eat > 0.0 { hunger * eat } else { eat } / d.scale;
+        let eat_value = if eat > 0.0 { hunger * eat } else { eat } / d.scale;
         let plans = self.plan(obs, hunger);
-        if d.sweep {
-            // A sweeping plan counts every meal on its way, so eating here
-            // counts the sweep that can follow it.
-            let after = plans.iter().flatten().fold(0.0_f64, |m, &(v, _)| m.max(v));
-            eat_value += d.discount * after;
-        }
         let mut options = vec![
             (Action::Rest, Tried::Rest, self.valence.rest / d.scale, None),
             (Action::Eat, Tried::Eat(here), eat_value, None),
@@ -481,8 +458,6 @@ struct Node {
     steps: u32,
     at: Pos,
     first: usize,
-    /// Food on the path so far, each square discounted by its distance.
-    found: f64,
 }
 
 impl PartialEq for Node {

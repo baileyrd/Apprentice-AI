@@ -79,14 +79,9 @@ fn sequence(seed: u64) -> Vec<Look> {
 
 fn recall() -> Recall {
     let off = std::env::args().any(|a| a == "--no-patterns");
-    let unseen = std::env::args().any(|a| a == "--unseen");
-    let net = apprentice::patterns::PatternNet {
-        unseen,
-        ..Default::default()
-    };
     Recall {
         patterns: !off,
-        pattern_net: Some(net),
+        pattern_net: Some(apprentice::patterns::PatternNet::default()),
         ..Recall::default()
     }
 }

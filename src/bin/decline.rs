@@ -16,12 +16,11 @@ use apprentice::life::{BARREN_STEPS, Learner, Setting, Stay, barren, barren_test
 use apprentice::memory::{Memory, Recall};
 use apprentice::model::Rates;
 use apprentice::model::{WorldModel, kind};
-use apprentice::patterns::PatternNet;
 use apprentice::sim::{Event, Outcome, Sim};
 use apprentice::world::{Cell, Pos};
 
 const USAGE: &str = "\
-usage: decline [--seeds N] [--from SEED] [--unseen] [--revisit RATE] [--out DIR]
+usage: decline [--seeds N] [--from SEED] [--revisit RATE] [--out DIR]
 
 Seeds FROM..FROM+N-1 (default 101..140, tuning seeds). Lives world 5 of a
 barren-first life seven ways (E experienced, P patterns wiped, M maps
@@ -29,8 +28,7 @@ wiped, V own values wiped, PV patterns and values wiped, F all three wiped,
 N newborn). Prints each arm against the newborn, meals on hopeful trips,
 and the calibration of eaten squares by time since last seen; writes
 DIR/decline.csv and DIR/calibration.csv (default DIR: runs/decline).
---unseen raises every arm with patterns that see time unseen; --revisit
-sets Drives::revisit for every arm.";
+--revisit sets Drives::revisit for every arm.";
 
 type Error = Box<dyn std::error::Error>;
 
@@ -74,8 +72,6 @@ impl Arm {
 struct Args {
     seeds: Vec<u64>,
     out: PathBuf,
-    /// Patterns that also see how long a square went unseen.
-    unseen: bool,
     /// `Drives::revisit` for every arm.
     revisit: f64,
 }
@@ -83,14 +79,9 @@ struct Args {
 fn parse(args: &[String]) -> Result<Args, String> {
     let (mut count, mut from) = (40, 101);
     let mut out = PathBuf::from("runs/decline");
-    let mut unseen = false;
     let mut revisit = Drives::default().revisit;
     let mut it = args.iter();
     while let Some(flag) = it.next() {
-        if flag == "--unseen" {
-            unseen = true;
-            continue;
-        }
         let value = it.next().ok_or(format!("{flag} needs a value"))?;
         let bad = || format!("bad {flag}: {value}");
         match flag.as_str() {
@@ -107,7 +98,6 @@ fn parse(args: &[String]) -> Result<Args, String> {
     Ok(Args {
         seeds: (from..from + count).collect(),
         out,
-        unseen,
         revisit,
     })
 }
@@ -431,13 +421,7 @@ fn calibration_csv(rows: &[Row]) -> String {
 }
 
 fn execute(args: &Args) -> Result<(), Error> {
-    let recall = Recall {
-        pattern_net: Some(PatternNet {
-            unseen: args.unseen,
-            ..PatternNet::default()
-        }),
-        ..Recall::default()
-    };
+    let recall = Recall::default();
     let setting = Setting {
         drives: Drives {
             revisit: args.revisit,

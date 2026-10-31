@@ -223,6 +223,8 @@ Both are reported only; no rule is judged.
 [results.txt](results.txt) (default) and
 [results-unseen.txt](results-unseen.txt) (`--unseen`), with their CSVs.
 The default run reproduces every earlier number.
+(`PatternNet::unseen` and the `--unseen` flag were removed on 2026-10-31,
+see docs/revisit; the last commit with them is c16c8bc.)
 
 ### 1. Where the newborn's extra meals come from
 

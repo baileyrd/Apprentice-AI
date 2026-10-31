@@ -227,3 +227,46 @@ with the whole interval below 0, and no measure rises by more than 10% for
 sure. The home test is the one cost: +13%, interval [+6%, +20%], about one
 more wrong answer every four seeds. So no removal is proposed. Making RUS
 the default would need its own marks and judging seeds.
+
+## Removed (Nano, 2026-10-31)
+
+Time-unseen (`PatternNet::unseen`), path-counting (`Drives::sweep`) and
+`revisit --extras` are deleted. The last commit with them is c16c8bc; the
+results above came from it.
+
+Why:
+
+- **They break the home-test limit.** Nano set it after the run above: a
+  default change may add at most +0.25 wrong answers per home test, at
+  the upper end of the raw 90% interval. RUS adds +0.24 [+0.13, +0.35],
+  so its upper end is over. The limit is a hard one, not a cost weighed
+  against gains.
+- **Experience pays less with them.** The test world against the first
+  barren world: R −58% [−60%, −56%] (raw −5.01 sleeps per 1,000), RUS
+  −12% [−19%, −4%] (raw −0.54). They help the first barren world most,
+  which narrows what later worlds add.
+
+What is given up: barren upbringing sleeps −50% (raw −10.6) and bush
+upbringing sleeps −35% (raw −8.3). In the test worlds the gain was small:
+−0.81 sleeps per 1,000 in barren, −1.44 sleeps in bush.
+
+## What barren and bush worlds tell us
+
+- **Barren worlds are solved by patrolling and sight.** The seeking
+  patroller has no learning, yet it gets close to R there: 4.2 against 2.8
+  sleeps per 1,000 steps (raw +1.4 [+0.4, +2.4]), and it eats more (98.9
+  against 71.8). So barren worlds tell learners apart only weakly.
+- **Learning shows in bush worlds.** There R sleeps 2.0 times per 1,000
+  steps against the seeking patroller's 8.8 (raw +6.8 [+6.4, +7.3]),
+  because it knows which squares grow back. Judging a learning change
+  should lean on bush worlds.
+
+## Open question
+
+**Why do time-unseen and path-counting harm the home test?** Neither is
+part of telling home from a stranger: the home test asks whether the map
+fits. Unchecked leads: patterns that see time unseen change how eaten
+squares are judged in the map-fit check (regrowth-judged fit), or sweeping
+plans change where it walks during a trial and so what it sees. The same
+kind of harm came with the patterns network (PR #21), and that cause is
+also still open.

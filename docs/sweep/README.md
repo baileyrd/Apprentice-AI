@@ -194,3 +194,11 @@ steps per sleep; S wastes 0.49 and loses 3.27. Barren test meals 32.5 →
 - **Barren test sleeps** fell 24%, a hair short of the 25% mark (unclear).
 
 Defaults unchanged: `PatternNet::unseen` and `Drives::sweep` stay off.
+
+## Removed (Nano, 2026-10-31)
+
+`PatternNet::unseen`, `Drives::sweep` and the bins `sweep` and `hope_steps`
+were deleted after revisit (docs/revisit) became the default. With revisit
+on, the two still saved sleeps but broke the home-test limit. Reasons and
+numbers are in docs/revisit under "Removed". The last commit with the code
+is c16c8bc, if anyone needs to rerun this page.
