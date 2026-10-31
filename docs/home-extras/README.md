@@ -67,18 +67,18 @@ answered right in all 800 trials of each arm.
 | Arm | Wrong per test | Against R, raw | Against R, % | Reading |
 |---|---|---|---|---|
 | R | 0.49 | | | |
-| RU (time-unseen) | 0.45 | −0.04 [−0.12, +0.04] | −2% [−7%, +3%] | does not raise |
+| RU (time-unseen) | 0.45 | −0.04 [−0.12, +0.04] | −2% [−7%, +3%] | no detectable effect |
 | RS (path-counting) | 0.65 | **+0.16 [+0.06, +0.25]** | +8% [+2%, +14%] | **raises** |
 | RUS (both) | 0.70 | +0.21 [+0.11, +0.31] | +12% [+6%, +18%] | reproduces |
 
-1. **Path-counting is the cause; time-unseen is not.** RS against R has
-   the whole interval above 0; RU against R does not (its point estimate
-   is slightly better than R).
+1. **Established: path-counting adds wrong answers.** RS against R has
+   the whole interval above 0. **Time-unseen: no detectable effect**; its
+   interval includes zero.
 2. **Mostly strangers taken as home**: 100% of RUS's extra wrong answers.
 3. **RUS reproduces on fresh seeds** (+0.21 against +0.24 on the old
    seeds). RUS − RS (+0.06) is within noise; no interaction is claimed.
 
-### Mechanism (seeds 241–300, reported only)
+### Mechanism: leads, not findings (seeds 241–300, exploratory)
 
 Probes on the 180 stranger trials per arm, first 100 steps:
 
@@ -100,9 +100,13 @@ back yet"**: about 80 sightings judged by patterns instead of the map,
 against about 45 in right trials, and those judged sightings carry low
 error (0.30–0.46 against 0.65).
 
-The chain, as far as these probes show it:
+Everything below is exploratory: one look-around run on 60 seeds, probes
+chosen after seeing the data, no pinned reading. These are leads to test
+on fresh seeds, not results.
 
-1. **Regrowth-judged fit (PR #11) is the door.** A square it ate from at
+The suggested chain:
+
+1. **Lead: regrowth-judged fit (PR #11) is the door.** A square it ate from at
    home stays in state "ate" while it looks empty. In a stranger, most of
    those squares *are* empty (only 3 bushes in 36 squares), so they look
    exactly like a bush not yet grown back, and the patterns' soft
@@ -111,14 +115,14 @@ The chain, as far as these probes show it:
    judging off during the trial halves strangers taken as home in every
    arm (R 23 → 11, RS 39 → 17), at a cost of 2 wrong answers in 120 home
    and changed-home trials.
-2. **Path-counting walks more traffic through that door.** RS has more
+2. **Lead: path-counting walks more traffic through that door.** RS has more
    pattern-judged sightings per trial (57 against 46) with lower error
    (0.57 against 0.63), so more of a stranger is excused. Likely, not
    checked: it ends home life with more recently eaten squares, and its
    patterns lean more toward "still empty". With the
    door shut, RS's excess over R falls from 16 to 6.
-3. **Most of it is what it learned at home, not how it walks in the
-   trial.** Switching path-counting off for the trial only takes RS from
+3. **Lead: most of it is what it learned at home, not how it walks in
+   the trial.** Switching path-counting off for the trial only takes RS from
    39 to 34; switching it on for R takes 23 to 30. So roughly a third of
    the harm comes from walking differently in the trial, two thirds from
    the mind raised with it (noisy: 60 seeds).
@@ -127,9 +131,10 @@ Not checked: how many squares are in state "ate" at the start of each
 trial (pattern-judged sightings stand in for it), and which pattern
 outputs moved.
 
-### Link to the network's cost (card "strangers taken for home")
+### Link to the network's cost (card "strangers taken for home"): a hypothesis
 
-The same door explains the patterns network's own cost. Regrowth-judged
+Hypothesis, not tested here: the same door explains the patterns
+network's own cost. Regrowth-judged
 fit off halves strangers taken as home for today's default (R) too, as
 the PR #22 check found on seeds 1–30. A fix would have to keep the
 excuse for home (where eaten squares do grow back) without granting it
@@ -137,3 +142,11 @@ in a world whose map does not otherwise fit, for example by excusing an
 eaten square only while the map's other squares fit, or for at most the
 regrowth time the patterns learned. That is a design change with its own
 marks; nothing here changes the apprentice.
+
+## Decision (Nano, 2026-10-31)
+
+Merged as docs only. Path-counting and the regrowth excuse both stay for
+now. Next: a narrower excuse (an eaten square is excused only while the
+rest of the map fits), with marks and thresholds written before running,
+judged on fresh seeds (501+) against today's default and against the
+excuse-off arm. If it does not close the gap, revisit path-counting.
