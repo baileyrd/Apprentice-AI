@@ -84,7 +84,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
     let (mut count, mut from) = (40, 101);
     let mut out = PathBuf::from("runs/decline");
     let mut unseen = false;
-    let mut revisit = 0.0;
+    let mut revisit = Drives::default().revisit;
     let mut it = args.iter();
     while let Some(flag) = it.next() {
         if flag == "--unseen" {

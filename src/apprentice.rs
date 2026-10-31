@@ -107,7 +107,8 @@ pub struct Drives {
     pub sweep: bool,
     /// Least rate at which a square's staleness grows per step unseen,
     /// whatever volatility it has learned: a square unseen for 1/revisit
-    /// steps pulls like one never seen. Zero leaves it to volatility.
+    /// steps pulls like one never seen. Zero leaves it to volatility. The
+    /// default, 1/128, was judged in docs/revisit.
     pub revisit: f64,
 }
 
@@ -123,7 +124,7 @@ impl Default for Drives {
             scale: 25.0,
             optimism: 25.0,
             sweep: false,
-            revisit: 0.0,
+            revisit: 1.0 / 128.0,
         }
     }
 }
@@ -752,6 +753,7 @@ mod tests {
     #[test]
     fn revisit_makes_a_long_unseen_square_as_stale_as_a_new_one() {
         let mut a = apprentice(0.5);
+        a.drives.revisit = 0.0;
         a.last_seen.insert(ORIGIN, 0);
         a.t = 8;
         let before = a.novelty(ORIGIN);
