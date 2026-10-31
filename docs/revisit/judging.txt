@@ -1,0 +1,25 @@
+1. barren test sleeps/1k, R vs A -88% [-88%, -87%], raw -25.32 [-25.68, -24.95]: met
+2. barren test meals/1k, R vs A +366% [+341%, +392%], raw +55.45 [+54.52, +56.38]: met
+3. R barren test vs first barren world, sleeps/1k -58% [-60%, -56%], raw -5.01 [-5.42, -4.60]: met
+4. R vs A, each at most +10%:
+   bush_sleeps -35% [-40%, -29%], raw -6.84 [-9.04, -4.64]: met
+   raised_bush_sleeps -21% [-25%, -18%], raw -8.32 [-9.82, -6.83]: met
+   raised_barren_sleeps -77% [-77%, -76%], raw -73.59 [-74.67, -72.52]: met
+   home_wrong_100 +1% [-5%, +7%], raw +0.01 [-0.09, +0.11]: met
+Reported only, R vs A:
+   barren_hopes -3% [-14%, +10%], raw -0.33 [-1.28, +0.62]
+   bush_hopes +55% [+30%, +86%], raw +2.02 [+0.60, +3.44]
+   bush_meals +14% [+6%, +22%], raw +14.86 [+9.53, +20.19]
+   barren_futile -84% [-86%, -82%], raw -11.63 [-12.88, -10.38]
+Means (A, R):
+   barren_sleeps_per_1k: 28.10, 2.79
+   barren_meals_per_1k: 16.38, 71.83
+   first_barren_sleeps: 20.93, 7.80
+   bush_sleeps: 14.82, 7.99
+   raised_bush_sleeps: 32.17, 23.84
+   raised_barren_sleeps: 95.30, 21.70
+   home_wrong_100: 0.55, 0.56
+   barren_hopes: 1.74, 1.41
+   bush_hopes: 2.83, 4.84
+   bush_meals: 277.49, 292.35
+   barren_futile: 13.64, 2.02

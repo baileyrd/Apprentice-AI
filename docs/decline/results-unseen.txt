@@ -1,0 +1,92 @@
+sleeps_per_1k (newborn 22.82 [20.61, 25.04]):
+   E 24.44 [22.10, 26.77]: +6% [-10%, +25%], raw +1.61 [-1.46, +4.69], gap closed 0%
+   P 24.11 [21.81, 26.41]: +4% [-13%, +25%], raw +1.29 [-1.90, +4.47], gap closed 20%
+   M 23.95 [21.75, 26.15]: +6% [-9%, +23%], raw +1.12 [-1.92, +4.17], gap closed 30%
+   V 22.66 [20.15, 25.18]: -3% [-20%, +17%], raw -0.16 [-3.81, +3.48], gap closed 110%
+   PV 22.39 [20.41, 24.36]: +0% [-15%, +19%], raw -0.44 [-3.76, +2.89], gap closed 127%
+   F 21.62 [19.78, 23.47]: -3% [-17%, +14%], raw -1.20 [-4.09, +1.69], gap closed 174%
+meals_per_1k (newborn 30.79 [26.38, 35.19]):
+   E 29.09 [24.28, 33.90]: -11% [-28%, +10%], raw -1.70 [-7.95, +4.55], gap closed -0%
+   P 30.64 [25.98, 35.29]: -3% [-21%, +20%], raw -0.15 [-6.56, +6.26], gap closed 91%
+   M 30.51 [25.91, 35.11]: -4% [-22%, +18%], raw -0.28 [-6.46, +5.91], gap closed 84%
+   V 31.30 [26.26, 36.34]: -4% [-25%, +22%], raw +0.51 [-6.78, +7.80], gap closed 130%
+   PV 31.95 [27.97, 35.93]: +5% [-15%, +31%], raw +1.16 [-5.56, +7.89], gap closed 168%
+   F 33.29 [29.63, 36.94]: +14% [-4%, +36%], raw +2.50 [-3.33, +8.33], gap closed 247%
+hopes (newborn 28.60 [24.72, 32.48]):
+   E 0.78 [0.35, 1.20]: -95% [-96%, -94%], raw -27.82 [-31.53, -24.12], gap closed -0%
+   P 22.30 [21.12, 23.48]: -18% [-26%, -10%], raw -6.30 [-10.67, -1.93], gap closed 77%
+   M 0.97 [-0.21, 2.16]: -96% [-96%, -95%], raw -27.62 [-31.75, -23.50], gap closed 1%
+   V 1.27 [-0.03, 2.58]: -96% [-96%, -95%], raw -27.32 [-31.44, -23.21], gap closed 2%
+   PV 19.85 [18.88, 20.82]: -27% [-33%, -20%], raw -8.75 [-12.75, -4.75], gap closed 69%
+   F 24.98 [24.18, 25.77]: -8% [-15%, -1%], raw -3.62 [-7.56, +0.31], gap closed 87%
+hopeful_trips_per_1k (newborn 46.54 [36.88, 56.19]):
+   E 38.66 [28.53, 48.79]: -34% [-54%, -7%], raw -7.88 [-21.24, +5.49], gap closed -0%
+   P 43.89 [33.59, 54.19]: -7% [-31%, +24%], raw -2.65 [-17.00, +11.70], gap closed 66%
+   M 42.02 [32.20, 51.85]: -29% [-53%, +5%], raw -4.51 [-17.98, +8.96], gap closed 43%
+   V 45.61 [34.05, 57.18]: -23% [-49%, +16%], raw -0.93 [-17.69, +15.84], gap closed 88%
+   PV 42.81 [34.83, 50.79]: -5% [-31%, +32%], raw -3.73 [-17.99, +10.54], gap closed 53%
+   F 49.50 [41.24, 57.76]: +18% [-10%, +55%], raw +2.96 [-10.45, +16.38], gap closed 138%
+meals_at_target_per_1k (newborn 3.35 [2.41, 4.29]):
+   E 2.84 [1.98, 3.69]: -13% [-34%, +14%], raw -0.51 [-1.73, +0.71], gap closed -0%
+   P 2.98 [2.10, 3.85]: -8% [-30%, +22%], raw -0.38 [-1.65, +0.90], gap closed 27%
+   M 2.95 [2.15, 3.75]: -8% [-31%, +23%], raw -0.40 [-1.62, +0.82], gap closed 22%
+   V 3.14 [2.26, 4.02]: -7% [-32%, +29%], raw -0.21 [-1.58, +1.16], gap closed 59%
+   PV 3.29 [2.46, 4.12]: +5% [-24%, +45%], raw -0.06 [-1.50, +1.37], gap closed 88%
+   F 3.59 [2.78, 4.40]: +14% [-13%, +49%], raw +0.24 [-1.03, +1.50], gap closed 146%
+meals_en_route_per_1k (newborn 5.05 [4.08, 6.02]):
+   E 3.90 [2.83, 4.97]: -31% [-46%, -12%], raw -1.15 [-2.52, +0.22], gap closed -0%
+   P 4.80 [3.77, 5.83]: -5% [-24%, +18%], raw -0.25 [-1.72, +1.22], gap closed 78%
+   M 4.34 [3.29, 5.38]: -24% [-42%, +0%], raw -0.71 [-2.12, +0.69], gap closed 38%
+   V 4.60 [3.39, 5.81]: -24% [-46%, +5%], raw -0.45 [-2.21, +1.31], gap closed 61%
+   PV 4.46 [3.63, 5.30]: -9% [-29%, +16%], raw -0.59 [-2.02, +0.85], gap closed 49%
+   F 5.99 [5.02, 6.96]: +19% [-4%, +47%], raw +0.94 [-0.46, +2.33], gap closed 182%
+meals_off_trip_per_1k (newborn 22.39 [19.67, 25.10]):
+   E 22.35 [19.29, 25.41]: -4% [-20%, +16%], raw -0.04 [-4.02, +3.95], gap closed -0%
+   P 22.86 [19.87, 25.86]: -1% [-17%, +19%], raw +0.47 [-3.51, +4.46], gap closed 1367%
+   M 23.23 [20.30, 26.15]: +2% [-14%, +21%], raw +0.84 [-3.01, +4.69], gap closed 2333%
+   V 23.56 [20.45, 26.67]: +2% [-16%, +24%], raw +1.18 [-3.25, +5.60], gap closed 3233%
+   PV 24.20 [21.60, 26.80]: +9% [-9%, +30%], raw +1.81 [-2.33, +5.95], gap closed 4933%
+   F 23.71 [21.62, 25.81]: +11% [-4%, +28%], raw +1.32 [-2.10, +4.75], gap closed 3633%
+volatility_at_start (newborn 0.00 [0.00, 0.00]):
+   E 0.00 [0.00, 0.00]: +0% [+0%, +0%], raw +0.00 [+0.00, +0.00], gap closed 0%
+   P 0.00 [0.00, 0.00]: +0% [+0%, +0%], raw +0.00 [+0.00, +0.00], gap closed 0%
+   M 0.00 [0.00, 0.00]: +0% [+0%, +0%], raw +0.00 [+0.00, +0.00], gap closed 0%
+   V 0.00 [0.00, 0.00]: +0% [+0%, +0%], raw +0.00 [+0.00, +0.00], gap closed 100%
+   PV 0.00 [0.00, 0.00]: +0% [+0%, +0%], raw +0.00 [+0.00, +0.00], gap closed 100%
+   F 0.00 [0.00, 0.00]: +0% [+0%, +0%], raw +0.00 [+0.00, +0.00], gap closed 100%
+calibration on eaten squares back in view, by steps since last in view:
+   E:
+      1-7: 19749 sightings, predicted 0.008, actual 0.004, bias +0.006 [+0.004, +0.007] over 40 seeds
+      8-31: 5067 sightings, predicted 0.025, actual 0.016, bias +0.010 [+0.007, +0.013] over 40 seeds
+      32-127: 7885 sightings, predicted 0.051, actual 0.044, bias +0.010 [+0.005, +0.016] over 40 seeds
+      128+: 2923 sightings, predicted 0.042, actual 0.071, bias -0.023 [-0.034, -0.013] over 40 seeds
+   P:
+      1-7: 24287 sightings, predicted 0.009, actual 0.003, bias +0.006 [+0.005, +0.007] over 40 seeds
+      8-31: 6051 sightings, predicted 0.039, actual 0.015, bias +0.036 [+0.022, +0.049] over 40 seeds
+      32-127: 9042 sightings, predicted 0.076, actual 0.043, bias +0.065 [+0.046, +0.084] over 40 seeds
+      128+: 2949 sightings, predicted 0.039, actual 0.068, bias -0.020 [-0.030, -0.011] over 39 seeds
+   M:
+      1-7: 21038 sightings, predicted 0.009, actual 0.005, bias +0.005 [+0.003, +0.006] over 40 seeds
+      8-31: 5855 sightings, predicted 0.022, actual 0.012, bias +0.011 [+0.009, +0.014] over 40 seeds
+      32-127: 8676 sightings, predicted 0.053, actual 0.043, bias +0.011 [+0.006, +0.015] over 40 seeds
+      128+: 3211 sightings, predicted 0.042, actual 0.069, bias -0.018 [-0.026, -0.011] over 40 seeds
+   V:
+      1-7: 17976 sightings, predicted 0.010, actual 0.005, bias +0.006 [+0.004, +0.007] over 40 seeds
+      8-31: 4785 sightings, predicted 0.033, actual 0.020, bias +0.013 [+0.010, +0.017] over 40 seeds
+      32-127: 9028 sightings, predicted 0.061, actual 0.049, bias +0.011 [+0.003, +0.020] over 40 seeds
+      128+: 3093 sightings, predicted 0.046, actual 0.075, bias -0.018 [-0.029, -0.008] over 39 seeds
+   PV:
+      1-7: 22487 sightings, predicted 0.009, actual 0.004, bias +0.009 [+0.002, +0.015] over 40 seeds
+      8-31: 5658 sightings, predicted 0.036, actual 0.017, bias +0.025 [+0.019, +0.031] over 40 seeds
+      32-127: 8035 sightings, predicted 0.071, actual 0.045, bias +0.045 [+0.032, +0.058] over 40 seeds
+      128+: 3456 sightings, predicted 0.040, actual 0.069, bias -0.019 [-0.026, -0.011] over 40 seeds
+   F:
+      1-7: 25118 sightings, predicted 0.009, actual 0.004, bias +0.005 [+0.004, +0.007] over 40 seeds
+      8-31: 5672 sightings, predicted 0.045, actual 0.016, bias +0.035 [+0.028, +0.042] over 40 seeds
+      32-127: 9484 sightings, predicted 0.082, actual 0.046, bias +0.055 [+0.043, +0.067] over 40 seeds
+      128+: 3288 sightings, predicted 0.053, actual 0.067, bias +0.003 [-0.006, +0.012] over 40 seeds
+   N:
+      1-7: 21141 sightings, predicted 0.009, actual 0.004, bias +0.006 [+0.005, +0.007] over 40 seeds
+      8-31: 5463 sightings, predicted 0.051, actual 0.021, bias +0.035 [+0.029, +0.041] over 40 seeds
+      32-127: 8289 sightings, predicted 0.089, actual 0.046, bias +0.073 [+0.057, +0.088] over 40 seeds
+      128+: 3216 sightings, predicted 0.057, actual 0.065, bias +0.011 [-0.008, +0.030] over 40 seeds

@@ -16,17 +16,21 @@ use apprentice::life::{BARREN_STEPS, Learner, Setting, Stay, barren, barren_test
 use apprentice::memory::{Memory, Recall};
 use apprentice::model::Rates;
 use apprentice::model::{WorldModel, kind};
+use apprentice::patterns::PatternNet;
 use apprentice::sim::{Event, Outcome, Sim};
 use apprentice::world::{Cell, Pos};
 
 const USAGE: &str = "\
-usage: decline [--seeds N] [--from SEED] [--out DIR]
+usage: decline [--seeds N] [--from SEED] [--unseen] [--revisit RATE] [--out DIR]
 
 Seeds FROM..FROM+N-1 (default 101..140, tuning seeds). Lives world 5 of a
 barren-first life seven ways (E experienced, P patterns wiped, M maps
 wiped, V own values wiped, PV patterns and values wiped, F all three wiped,
-N newborn), prints each arm against the newborn and the calibration of eaten squares by time since last seen,
-and writes DIR/decline.csv and DIR/calibration.csv (default DIR: runs/decline).";
+N newborn). Prints each arm against the newborn, meals on hopeful trips,
+and the calibration of eaten squares by time since last seen; writes
+DIR/decline.csv and DIR/calibration.csv (default DIR: runs/decline).
+--unseen raises every arm with patterns that see time unseen; --revisit
+sets Drives::revisit for every arm.";
 
 type Error = Box<dyn std::error::Error>;
 
@@ -70,19 +74,30 @@ impl Arm {
 struct Args {
     seeds: Vec<u64>,
     out: PathBuf,
+    /// Patterns that also see how long a square went unseen.
+    unseen: bool,
+    /// `Drives::revisit` for every arm.
+    revisit: f64,
 }
 
 fn parse(args: &[String]) -> Result<Args, String> {
     let (mut count, mut from) = (40, 101);
     let mut out = PathBuf::from("runs/decline");
+    let mut unseen = false;
+    let mut revisit = 0.0;
     let mut it = args.iter();
     while let Some(flag) = it.next() {
+        if flag == "--unseen" {
+            unseen = true;
+            continue;
+        }
         let value = it.next().ok_or(format!("{flag} needs a value"))?;
         let bad = || format!("bad {flag}: {value}");
         match flag.as_str() {
             "--seeds" => count = value.parse().map_err(|_| bad())?,
             "--from" => from = value.parse().map_err(|_| bad())?,
             "--out" => out = PathBuf::from(value),
+            "--revisit" => revisit = value.parse().map_err(|_| bad())?,
             _ => return Err(format!("unknown flag: {flag}")),
         }
     }
@@ -92,6 +107,8 @@ fn parse(args: &[String]) -> Result<Args, String> {
     Ok(Args {
         seeds: (from..from + count).collect(),
         out,
+        unseen,
+        revisit,
     })
 }
 
@@ -152,12 +169,78 @@ impl Calibration {
     }
 }
 
-/// World 5 of `seed`'s barren-first life, with `arm` wiped first.
-fn world_five(seed: u64, arm: Arm) -> Result<(Stay, [Bin; 4]), Error> {
-    let setting = Setting::from(Recall::default());
+/// Steps after a hopeful trip's last move in which a meal still counts
+/// for it: enough to reach any square seen from where it stopped.
+const AFTER_TRIP: u64 = 3;
+
+/// Meals on hopeful trips: runs of moves toward one square it ate from
+/// earlier in this world, out of view when the run began.
+#[derive(Debug, Default, Clone)]
+struct Trips {
+    trips: u32,
+    at_target: u32,
+    en_route: u32,
+    off_trip: u32,
+    t: u64,
+    eaten: HashSet<Pos>,
+    /// The current trip's goal, and the last trip's goal and last move.
+    current: Option<Pos>,
+    last: Option<(Pos, u64)>,
+}
+
+impl Trips {
+    /// Called after each step, with the goal of the move just made.
+    fn watch(&mut self, mind: &Learner, sim: &Sim, outcome: &Outcome, here: Pos) {
+        self.t += 1;
+        if outcome.event == Event::Ate {
+            self.credit(here);
+            self.eaten.insert(here);
+        }
+        let start = sim.start();
+        let goal = mind.goal().map(|g| g.shift(start.x, start.y));
+        let hopeful = goal.filter(|g| {
+            let in_view = (g.x - here.x).abs() <= 1 && (g.y - here.y).abs() <= 1;
+            self.eaten.contains(g) && (self.current == Some(*g) || !in_view)
+        });
+        if hopeful.is_some() && hopeful != self.current {
+            self.trips += 1;
+        }
+        self.current = hopeful;
+        if let Some(g) = hopeful {
+            self.last = Some((g, self.t));
+        }
+    }
+
+    fn credit(&mut self, here: Pos) {
+        match self.last {
+            Some((goal, step)) if self.t - step <= AFTER_TRIP => {
+                if goal == here {
+                    self.at_target += 1;
+                } else {
+                    self.en_route += 1;
+                }
+            }
+            _ => self.off_trip += 1,
+        }
+    }
+}
+
+/// What world 5 showed under one arm.
+#[derive(Debug, Clone)]
+struct World {
+    stay: Stay,
+    bins: [Bin; 4],
+    trips: Trips,
+    /// Its volatility as world 5 began.
+    volatility: f64,
+}
+
+/// World 5 of `seed`'s barren-first life under `recall`, with `arm` wiped
+/// first.
+fn world_five(seed: u64, arm: Arm, setting: Setting) -> Result<World, Error> {
     let mut mind = if arm == Arm::Newborn {
         let memory = Memory::new(Rates::default(), setting.recall);
-        Apprentice::with_model(Drives::default(), memory, seed)
+        Apprentice::with_model(setting.drives, memory, seed)
     } else {
         raise(setting, seed, &barren())?.0
     };
@@ -170,24 +253,31 @@ fn world_five(seed: u64, arm: Arm) -> Result<(Stay, [Bin; 4]), Error> {
     if matches!(arm, Arm::Values | Arm::PatternsValues | Arm::Full) {
         mind.forget_values();
     }
+    let volatility = mind.volatility();
     let mut calibration = Calibration::default();
-    let stay = barren_test_watched(&mut mind, seed, |m, s, o, h| calibration.watch(m, s, o, h))?;
-    Ok((stay, calibration.bins))
+    let mut trips = Trips::default();
+    let stay = barren_test_watched(&mut mind, seed, |m, s, o, h| {
+        calibration.watch(m, s, o, h);
+        trips.watch(m, s, o, h);
+    })?;
+    Ok(World {
+        stay,
+        bins: calibration.bins,
+        trips,
+        volatility,
+    })
 }
 
 /// One seed and world 5 under each arm, in `ARMS` order.
-type Row = (u64, Vec<Stay>, Vec<[Bin; 4]>);
+type Row = (u64, Vec<World>);
 
-fn rows(seeds: &[u64]) -> Result<Vec<Row>, Error> {
+fn rows(seeds: &[u64], setting: Setting) -> Result<Vec<Row>, Error> {
     let workers = thread::available_parallelism().map_or(1, |n| n.get());
     let chunk = seeds.len().div_ceil(workers).max(1);
     let one = |seed: u64| -> Result<Row, String> {
-        let worlds: Result<Vec<_>, Error> = ARMS.iter().map(|&a| world_five(seed, a)).collect();
-        let (stays, bins) = worlds
-            .map_err(|e| format!("seed {seed}: {e}"))?
-            .into_iter()
-            .unzip();
-        Ok((seed, stays, bins))
+        let worlds: Result<Vec<World>, Error> =
+            ARMS.iter().map(|&a| world_five(seed, a, setting)).collect();
+        Ok((seed, worlds.map_err(|e| format!("seed {seed}: {e}"))?))
     };
     let parts: Vec<Result<Vec<Row>, String>> = thread::scope(|scope| {
         let handles: Vec<_> = seeds
@@ -206,17 +296,28 @@ fn rows(seeds: &[u64]) -> Result<Vec<Row>, Error> {
     Ok(all)
 }
 
-/// A per-1,000-steps measure of a world-5 stay.
-type Measure = (&'static str, fn(&Stay) -> f64);
+/// A measure of world 5, mostly per 1,000 steps.
+type Measure = (&'static str, fn(&World) -> f64);
 
 const PER_K: f64 = 1_000.0 / BARREN_STEPS as f64;
-const MEASURES: [Measure; 3] = [
-    ("sleeps_per_1k", |s| f64::from(s.sleeps) * PER_K),
-    ("meals_per_1k", |s| f64::from(s.meals) * PER_K),
-    ("hopes", |s| f64::from(s.hopes)),
+const MEASURES: [Measure; 8] = [
+    ("sleeps_per_1k", |w| f64::from(w.stay.sleeps) * PER_K),
+    ("meals_per_1k", |w| f64::from(w.stay.meals) * PER_K),
+    ("hopes", |w| f64::from(w.stay.hopes)),
+    ("hopeful_trips_per_1k", |w| f64::from(w.trips.trips) * PER_K),
+    ("meals_at_target_per_1k", |w| {
+        f64::from(w.trips.at_target) * PER_K
+    }),
+    ("meals_en_route_per_1k", |w| {
+        f64::from(w.trips.en_route) * PER_K
+    }),
+    ("meals_off_trip_per_1k", |w| {
+        f64::from(w.trips.off_trip) * PER_K
+    }),
+    ("volatility_at_start", |w| w.volatility),
 ];
 
-fn column(rows: &[Row], arm: usize, f: fn(&Stay) -> f64) -> Vec<f64> {
+fn column(rows: &[Row], arm: usize, f: fn(&World) -> f64) -> Vec<f64> {
     rows.iter().map(|r| f(&r.1[arm])).collect()
 }
 
@@ -227,9 +328,9 @@ fn mean(xs: &[f64]) -> f64 {
 fn csv(rows: &[Row]) -> String {
     let names: Vec<&str> = MEASURES.iter().map(|m| m.0).collect();
     let mut out = format!("seed,arm,{}\n", names.join(","));
-    for (seed, stays, _) in rows {
-        for (arm, stay) in ARMS.iter().zip(stays) {
-            let values: Vec<String> = MEASURES.iter().map(|m| m.1(stay).to_string()).collect();
+    for (seed, worlds) in rows {
+        for (arm, world) in ARMS.iter().zip(worlds) {
+            let values: Vec<String> = MEASURES.iter().map(|m| m.1(world).to_string()).collect();
             out.push_str(&format!("{seed},{},{}\n", arm.name(), values.join(",")));
         }
     }
@@ -280,7 +381,7 @@ fn report_calibration(rows: &[Row]) -> Result<(), Error> {
     for (a, arm) in ARMS.iter().enumerate() {
         println!("   {}:", arm.name());
         for (b, name) in BIN_NAMES.iter().enumerate() {
-            let bins: Vec<Bin> = rows.iter().map(|r| r.2[a][b]).collect();
+            let bins: Vec<Bin> = rows.iter().map(|r| r.1[a].bins[b]).collect();
             let seen: u32 = bins.iter().map(|x| x.seen).sum();
             if seen == 0 {
                 println!("      {name}: no sightings");
@@ -313,9 +414,9 @@ fn report_calibration(rows: &[Row]) -> Result<(), Error> {
 
 fn calibration_csv(rows: &[Row]) -> String {
     let mut out = String::from("seed,arm,bin,seen,predicted_sum,food\n");
-    for (seed, _, bins) in rows {
-        for (arm, per_bin) in ARMS.iter().zip(bins) {
-            for (name, b) in BIN_NAMES.iter().zip(per_bin) {
+    for (seed, worlds) in rows {
+        for (arm, world) in ARMS.iter().zip(worlds) {
+            for (name, b) in BIN_NAMES.iter().zip(&world.bins) {
                 out.push_str(&format!(
                     "{seed},{},{name},{},{},{}\n",
                     arm.name(),
@@ -330,7 +431,21 @@ fn calibration_csv(rows: &[Row]) -> String {
 }
 
 fn execute(args: &Args) -> Result<(), Error> {
-    let rows = rows(&args.seeds)?;
+    let recall = Recall {
+        pattern_net: Some(PatternNet {
+            unseen: args.unseen,
+            ..PatternNet::default()
+        }),
+        ..Recall::default()
+    };
+    let setting = Setting {
+        drives: Drives {
+            revisit: args.revisit,
+            ..Drives::default()
+        },
+        ..Setting::from(recall)
+    };
+    let rows = rows(&args.seeds, setting)?;
     for measure in MEASURES {
         report(&rows, measure)?;
     }
@@ -360,5 +475,26 @@ fn main() -> ExitCode {
             eprintln!("decline: {e}");
             ExitCode::FAILURE
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const GOAL: Pos = Pos { x: 3, y: 0 };
+
+    #[test]
+    fn a_meal_counts_for_the_trip_only_soon_after_its_last_move() {
+        let mut trips = Trips {
+            t: 10,
+            last: Some((GOAL, 9)),
+            ..Trips::default()
+        };
+        trips.credit(GOAL);
+        trips.credit(Pos { x: 4, y: 0 });
+        trips.t = 9 + AFTER_TRIP + 1;
+        trips.credit(GOAL);
+        assert_eq!((trips.at_target, trips.en_route, trips.off_trip), (1, 1, 1));
     }
 }

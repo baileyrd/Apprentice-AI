@@ -20,6 +20,7 @@ pub mod mentor;
 pub mod metrics;
 pub mod model;
 pub mod network;
+pub mod patroller;
 pub mod patterns;
 pub mod peer;
 pub mod physics;
