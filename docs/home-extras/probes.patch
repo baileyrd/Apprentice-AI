@@ -1,0 +1,110 @@
+diff --git a/src/apprentice.rs b/src/apprentice.rs
+index 3b4a99b..62eeab6 100644
+--- a/src/apprentice.rs
++++ b/src/apprentice.rs
+@@ -159,6 +159,7 @@ enum Tried {
+ 
+ /// The learner: acts on its own learned model, valence and volatility.
+ /// Phase 2 and 3 use [`PredictiveCoding`]; phase 4 a [`crate::memory::Memory`].
++#[derive(Clone)]
+ pub struct Apprentice<M = PredictiveCoding> {
+     model: M,
+     drives: Drives,
+@@ -225,6 +226,11 @@ impl<M: WorldModel> Apprentice<M> {
+         self.goal
+     }
+ 
++    /// Probe: its wants, to change from outside.
++    pub fn drives_mut(&mut self) -> &mut Drives {
++        &mut self.drives
++    }
++
+     /// Its model, to change from outside (for experiments that wipe it).
+     pub fn model_mut(&mut self) -> &mut M {
+         &mut self.model
+diff --git a/src/memory.rs b/src/memory.rs
+index 82a78d5..026a92e 100644
+--- a/src/memory.rs
++++ b/src/memory.rs
+@@ -309,6 +309,8 @@ struct Context {
+     samples: usize,
+     /// How each square last changed, when, and when it was last sensed.
+     seen: HashMap<Pos, Seen>,
++    /// Probe: sightings judged by patterns (count, error sum), then by map.
++    pub probe: (u64, f64, u64, f64),
+ }
+ 
+ impl Context {
+@@ -319,6 +321,7 @@ impl Context {
+             fit: 0.0,
+             samples: 0,
+             seen: HashMap::new(),
++            probe: (0, 0.0, 0, 0.0),
+         }
+     }
+ 
+@@ -329,6 +332,13 @@ impl Context {
+             return;
+         }
+         let e = error(&expected.unwrap_or_else(|| self.map.predict(at)), sensed);
++        if expected.is_some() {
++            self.probe.0 += 1;
++            self.probe.1 += e;
++        } else {
++            self.probe.2 += 1;
++            self.probe.3 += e;
++        }
+         self.fit = if self.samples == 0 {
+             e
+         } else {
+@@ -372,6 +382,8 @@ pub struct Memory {
+     kept: Vec<Sample>,
+     offered: usize,
+     traffic: Traffic,
++    /// Probe: whether eaten squares are judged by patterns when scoring maps.
++    regrowth_fit: bool,
+ }
+ 
+ /// Patterns as at birth.
+@@ -403,6 +415,7 @@ impl Memory {
+             lost: 0,
+             lost_since: 0,
+             doubt: (0, 0),
++            regrowth_fit: true,
+             patterns: fresh_patterns(recall),
+             working: Vec::new(),
+             confirmed: HashSet::new(),
+@@ -545,6 +558,23 @@ impl Memory {
+             .collect()
+     }
+ 
++    /// Probe: turn regrowth-judged fit on or off.
++    pub fn set_regrowth_fit(&mut self, on: bool) {
++        self.regrowth_fit = on;
++    }
++
++    /// Probe: map `i`'s judging counts since the last reset.
++    pub fn probe(&self, i: usize) -> (u64, f64, u64, f64) {
++        self.contexts.get(i).map_or((0, 0.0, 0, 0.0), |c| c.probe)
++    }
++
++    /// Probe: zero every map's judging counts.
++    pub fn reset_probe(&mut self) {
++        for c in &mut self.contexts {
++            c.probe = (0, 0.0, 0, 0.0);
++        }
++    }
++
+     /// Doubt held now, and the doubt at which it starts a new map.
+     pub fn doubt(&self) -> (usize, usize) {
+         (self.lost, self.recall.settle)
+@@ -832,7 +862,8 @@ impl WorldModel for Memory {
+         let rate = self.recall.fit_rate;
+         // A bush it ate from is judged by when it should grow back, not by
+         // the map: an expected change is no sign of being somewhere else.
+-        let (active, patterns, on) = (self.active, &self.patterns, self.recall.patterns);
++        let on = self.recall.patterns && self.regrowth_fit;
++        let (active, patterns) = (self.active, &self.patterns);
+         for (i, ctx) in self.contexts.iter_mut().enumerate() {
+             let state = if i == active {
+                 before
