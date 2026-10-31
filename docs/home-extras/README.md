@@ -113,8 +113,9 @@ The chain, as far as these probes show it:
    and changed-home trials.
 2. **Path-counting walks more traffic through that door.** RS has more
    pattern-judged sightings per trial (57 against 46) with lower error
-   (0.57 against 0.63): it eats around home more and its patterns lean
-   more toward "still empty", so more of a stranger is excused. With the
+   (0.57 against 0.63), so more of a stranger is excused. Likely, not
+   checked: it ends home life with more recently eaten squares, and its
+   patterns lean more toward "still empty". With the
    door shut, RS's excess over R falls from 16 to 6.
 3. **Most of it is what it learned at home, not how it walks in the
    trial.** Switching path-counting off for the trial only takes RS from
