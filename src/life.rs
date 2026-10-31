@@ -205,12 +205,12 @@ fn add(a: Traffic, b: Traffic) -> Traffic {
 }
 
 /// Wrong answers to "is this home?" over the five trials, after `ASKED`
-/// steps and after `TRIAL_STEPS`.
-fn home_test(setting: Setting, seed: u64) -> Result<(u32, u32), SimError> {
+/// steps and after `TRIAL_STEPS`, and strangers taken as home after `ASKED`.
+fn home_test(setting: Setting, seed: u64) -> Result<((u32, u32), u32), SimError> {
     let places = [Place::Home, Place::Changed]
         .into_iter()
         .chain((0..STRANGERS).map(Place::Stranger));
-    let mut wrong = (0, 0);
+    let (mut wrong, mut strangers) = ((0, 0), 0);
     for place in places {
         let (mut mind, home, home_map) = at_home_as(setting.recall, setting.drives, seed)?;
         let mut sim = world(place, &home, seed);
@@ -219,13 +219,14 @@ fn home_test(setting: Setting, seed: u64) -> Result<(u32, u32), SimError> {
             let right = (mind.map_in_use() == home_map) == place.is_home();
             if s == ASKED {
                 wrong.0 += u32::from(!right);
+                strangers += u32::from(!right && !place.is_home());
             }
             if s == TRIAL_STEPS {
                 wrong.1 += u32::from(!right);
             }
         }
     }
-    Ok(wrong)
+    Ok((wrong, strangers))
 }
 
 /// A named per-seed measure.
@@ -256,6 +257,8 @@ pub struct Life {
     pub barren: Stay,
     /// Wrong home-test answers after `ASKED` and `TRIAL_STEPS` steps.
     pub home: (u32, u32),
+    /// Strangers taken as home after `ASKED` steps (part of `home.0`).
+    pub strangers_home: u32,
     /// Each upbringing world before the bush test (bush first) and before
     /// the barren test (barren first).
     pub bush_raised: [Stay; RAISED],
@@ -284,6 +287,7 @@ pub fn life(setting: impl Into<Setting>, seed: u64) -> Result<Life, SimError> {
     let setting = setting.into();
     let (bush_raised, bush) = upbringing_then(setting, seed, bushes(), BUSH_STEPS)?;
     let (barren_raised, barren) = upbringing_then(setting, seed, barren(), BARREN_STEPS)?;
+    let (home, strangers_home) = home_test(setting, seed)?;
     let raised = bush_raised.iter().fold(Stay::default(), |mut all, s| {
         all.sleeps += s.sleeps;
         all.traffic = add(all.traffic, s.traffic);
@@ -293,7 +297,8 @@ pub fn life(setting: impl Into<Setting>, seed: u64) -> Result<Life, SimError> {
         raised,
         bush,
         barren,
-        home: home_test(setting, seed)?,
+        home,
+        strangers_home,
         bush_raised,
         barren_raised,
     })
@@ -383,6 +388,7 @@ mod tests {
             bush: Stay::default(),
             barren: Stay::default(),
             home: (0, 0),
+            strangers_home: 0,
             // Bush first: bush, barren, bush, barren.
             bush_raised: stays([1, 10, 1, 10]),
             // Barren first: barren, bush, barren, bush.
