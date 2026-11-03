@@ -52,3 +52,19 @@ Reading, fixed now:
 
 Reported only: P's drop (should repeat about −0.150), `|B − A|` per arm,
 and the share of misses that guess a view the centre never shows.
+
+## Tuning (seeds 101–110), before the judging run
+
+| Strength λ | Turning drop | Walking one-ahead | \|B − A\| |
+|---|---|---|---|
+| plain | 0.166 | 0.800 | 10.81 |
+| 1 | 0.040 | 0.825 | 9.86 |
+| 3 | 0.029 | 0.827 | 8.70 |
+| **10** | **0.014** | 0.819 | 7.75 |
+| 30 | 0.037 | 0.802 | 6.68 |
+
+Every strength keeps walking within 0.02 of plain, and λ = 10 has the
+smallest drop, so the rule picks **λ = 10**. That λ is fixed for the
+judging run.
+
+Run: `cargo run --release --bin stiffness -- --strength 10 --from 1201 --seeds 200`.
