@@ -59,6 +59,18 @@ impl std::fmt::Display for NetError {
 
 impl std::error::Error for NetError {}
 
+/// Per-weight stiffness: a local brake on later learning (see
+/// `docs/stiffness`). One entry per weight, then per bias.
+#[derive(Debug, Clone, PartialEq)]
+enum Brake {
+    /// Learns freely.
+    Off,
+    /// Learns freely, adding up the size of each parameter's updates.
+    Gather(Vec<f64>),
+    /// Each parameter's updates are scaled by its own factor.
+    Hold(Vec<f64>),
+}
+
 /// Connections from one layer to the next.
 #[derive(Debug, Clone, PartialEq)]
 struct Link {
@@ -66,6 +78,21 @@ struct Link {
     /// Row-major, one row per upper unit.
     weights: Vec<f64>,
     bias: Vec<f64>,
+    brake: Brake,
+}
+
+impl Brake {
+    /// The update parameter `k` takes from a free update `delta`.
+    fn apply(&mut self, k: usize, delta: f64) -> f64 {
+        match self {
+            Self::Off => delta,
+            Self::Gather(sizes) => {
+                sizes[k] += delta.abs();
+                delta
+            }
+            Self::Hold(scales) => delta * scales[k],
+        }
+    }
 }
 
 impl Link {
@@ -77,6 +104,7 @@ impl Link {
                 .map(|_| scale * (2.0 * rng.unit() - 1.0))
                 .collect(),
             bias: vec![0.0; outs],
+            brake: Brake::Off,
         }
     }
 
@@ -103,15 +131,17 @@ impl Link {
     /// Local rule: each weight moves by its upper unit's error times its
     /// lower unit's activity.
     fn learn(&mut self, below: &[f64], error: &[f64], rate: f64) {
-        for ((row, b), e) in self
+        let n = self.weights.len();
+        for (u, ((row, b), e)) in self
             .weights
             .chunks_mut(self.ins)
             .zip(&mut self.bias)
             .zip(error)
+            .enumerate()
         {
-            *b += rate * e;
-            for (w, a) in row.iter_mut().zip(below) {
-                *w += rate * e * a;
+            *b += self.brake.apply(n + u, rate * e);
+            for (i, (w, a)) in row.iter_mut().zip(below).enumerate() {
+                *w += self.brake.apply(u * self.ins + i, rate * e * a);
             }
         }
     }
@@ -162,6 +192,39 @@ impl Net {
             links,
             rate,
             learning,
+        }
+    }
+
+    /// Starts adding up, per parameter, the size of its own updates.
+    pub fn gather_stiffness(&mut self) {
+        for link in &mut self.links {
+            link.brake = Brake::Gather(vec![0.0; link.weights.len() + link.bias.len()]);
+        }
+    }
+
+    /// From now on each parameter's updates are scaled by
+    /// `1 / (1 + strength · Ω / Ω̄)`: Ω its own gathered update size, Ω̄ the
+    /// mean over the net. With nothing gathered, it learns freely.
+    pub fn hold_stiffness(&mut self, strength: f64) {
+        let gathered: Vec<f64> = self
+            .links
+            .iter()
+            .flat_map(|l| match &l.brake {
+                Brake::Gather(sizes) => sizes.clone(),
+                Brake::Off | Brake::Hold(_) => Vec::new(),
+            })
+            .collect();
+        let mean = gathered.iter().sum::<f64>() / gathered.len().max(1) as f64;
+        for link in &mut self.links {
+            link.brake = match (&link.brake, mean > 0.0) {
+                (Brake::Gather(sizes), true) => Brake::Hold(
+                    sizes
+                        .iter()
+                        .map(|o| 1.0 / (1.0 + strength * o / mean))
+                        .collect(),
+                ),
+                _ => Brake::Off,
+            };
         }
     }
 

@@ -2,10 +2,9 @@
 //! each seed and judges the marks in `docs/retention/README.md`.
 
 use std::process::ExitCode;
-use std::thread;
 
 use apprentice::judge::{Interval, Verdict};
-use apprentice::retention::{Kept, Retention, retain};
+use apprentice::retention::{Kept, Retention, retain_seeds};
 
 const USAGE: &str = "\
 usage: retention [--from SEED] [--seeds N]
@@ -18,6 +17,7 @@ const RUN: Retention = Retention {
     walking: 40_000,
     test: 2_000,
     rate: 0.05,
+    stiffness: None,
 };
 /// Largest drop that still counts as held (mark D).
 const DROP: f64 = 0.05;
@@ -43,26 +43,7 @@ fn parse(args: &[String]) -> Result<Vec<u64>, String> {
 }
 
 fn run(seeds: &[u64]) -> Result<Vec<Kept>, String> {
-    let workers = thread::available_parallelism().map_or(4, |n| n.get());
-    let mut out = Vec::with_capacity(seeds.len());
-    for chunk in seeds.chunks(workers) {
-        let kept = thread::scope(|s| {
-            let handles: Vec<_> = chunk
-                .iter()
-                .map(|&seed| s.spawn(move || retain(&RUN, seed)))
-                .collect();
-            handles
-                .into_iter()
-                .map(|h| {
-                    h.join()
-                        .map_err(|_| "a life panicked".to_string())?
-                        .map_err(|e| e.to_string())
-                })
-                .collect::<Result<Vec<_>, String>>()
-        })?;
-        out.extend(kept);
-    }
-    Ok(out)
+    retain_seeds(&RUN, seeds).map_err(|e| e.to_string())
 }
 
 fn mean(xs: &[f64]) -> f64 {
