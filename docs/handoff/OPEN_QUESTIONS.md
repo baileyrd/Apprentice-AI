@@ -12,3 +12,4 @@ Resolved items are checked and point to the D#/QA entry that answers them.
 - [ ] Q7 (2026-11-03, n): Delete the gate (off, missed marks, last time-unseen split user) or judge it once more on fresh seeds?
 - [ ] Q8 (2026-11-03, n): Should barren worlds get learnable structure (clustered or seasonal regrowth) so they test learning?
 - [ ] Q9 (2026-11-03, n): Retention next step: test per-weight stiffness against the −0.150 decay (card #707)? Not picked.
+- [ ] Q10 (2026-11-03, n): Conflict. D14 lists spent seeds as 1–700 main and 1–160/201–210 facing; docs/retention/README.md (PR #41) also spent 1001–1200 (and smoked on 101–102). — interim: treat 1001–1200 as spent; D32 allocates 701–910 to stiffness.
