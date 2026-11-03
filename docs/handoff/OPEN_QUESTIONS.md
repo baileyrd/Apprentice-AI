@@ -11,5 +11,5 @@ Resolved items are checked and point to the D#/QA entry that answers them.
 - [ ] Q6 (2026-11-03, n): Does the network apprentice still take strangers for home more than the table, now the excuse is gone? (card #544, seeds 701+)
 - [ ] Q7 (2026-11-03, n): Delete the gate (off, missed marks, last time-unseen split user) or judge it once more on fresh seeds?
 - [ ] Q8 (2026-11-03, n): Should barren worlds get learnable structure (clustered or seasonal regrowth) so they test learning?
-- [ ] Q9 (2026-11-03, n): Retention next step: test per-weight stiffness against the −0.150 decay (card #707)? Not picked.
-- [ ] Q10 (2026-11-03, n): Conflict. D14 lists spent seeds as 1–700 main and 1–160/201–210 facing; docs/retention/README.md (PR #41) also spent 1001–1200 (and smoked on 101–102). — interim: treat 1001–1200 as spent; D32 allocates 701–910 to stiffness.
+- [x] Q9 (2026-11-03, n): Retention next step: test per-weight stiffness against the −0.150 decay (card #707)? Not picked. — resolved: tested, all 3 marks met, proposed for #707, off by default → D33
+- [x] Q10 (2026-11-03, n): Conflict. D14 lists spent seeds as 1–700 main and 1–160/201–210 facing; docs/retention/README.md (PR #41) also spent 1001–1200 (and smoked on 101–102). — interim: treat 1001–1200 as spent; D32 allocates 701–910 to stiffness. — resolved: spent list now adds 1001–1200 and 1201–1400; 701–1000 fresh → D33
