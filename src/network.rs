@@ -165,6 +165,14 @@ impl Net {
         }
     }
 
+    /// Every weight then bias of every link, input side first, flattened.
+    pub fn params(&self) -> Vec<f64> {
+        self.links
+            .iter()
+            .flat_map(|l| l.weights.iter().chain(&l.bias).copied())
+            .collect()
+    }
+
     /// Every layer's value on a forward sweep, input first, output last.
     pub fn sweep(&self, input: &[f64]) -> Vec<Vec<f64>> {
         let mut layers = vec![input.to_vec()];

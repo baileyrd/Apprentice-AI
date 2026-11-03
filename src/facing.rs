@@ -131,6 +131,12 @@ impl World {
             .unwrap_or(0)
     }
 
+    /// The motor that steps forward, if this stage has one. For the
+    /// driver, not the learner.
+    pub fn forward_motor(&self) -> Option<usize> {
+        self.motors.iter().position(|&e| e == Effect::Forward)
+    }
+
     /// Every look's true pattern, by look id. For scoring only.
     pub fn looks(&self) -> &[Sense] {
         &self.looks
@@ -251,6 +257,15 @@ impl Driver {
         d
     }
 
+    /// A driver that only stares and turns: it never fires the forward
+    /// motor, so in the walking world it stays in the centre.
+    pub fn turning(world: &World, seed: u64) -> Self {
+        let mut d = Self::new(world, seed);
+        let forward = world.forward_motor();
+        d.turns.retain(|&m| Some(m) != forward);
+        d
+    }
+
     /// The next motor to fire; for a turn, also how long it stared first.
     pub fn drive(&mut self) -> Drive {
         if self.left > 0 {
@@ -341,6 +356,22 @@ impl Learner {
             motors,
             recall: vec![0.0; recall],
         })
+    }
+
+    /// Steps its memory past `sense` and `motor` without learning.
+    pub fn observe(&mut self, sense: &[f64], motor: usize) {
+        let x = self.input(&self.recall, sense, motor);
+        self.recall = self.next_recall(&x, sense, motor);
+    }
+
+    /// Clears what it carries between steps.
+    pub fn rest(&mut self) {
+        self.recall.fill(0.0);
+    }
+
+    /// Every weight and bias of its network, flattened.
+    pub fn params(&self) -> Vec<f64> {
+        self.net.params()
     }
 
     /// Its hidden layer's activity on this step. For the probe.

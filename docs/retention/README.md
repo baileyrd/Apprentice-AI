@@ -62,3 +62,32 @@ Reported only, not judged: control drop (after A − after C), walking's
 one-ahead at the end of B, and `|B − A|` / `|A − start|`.
 
 Run: `cargo run --release --bin retention -- --from 1001 --seeds 200`.
+
+## Results (seeds 1001–1200): turning decayed
+
+Run once at the commit that added the harness; smoke on 101–102 only
+(drop +0.045 there, n = 2).
+
+| | Mean | 90% interval | Mark | Verdict |
+|---|---|---|---|---|
+| D: drop after walking | +0.150 | [+0.133, +0.166] | held if top ≤ 0.05 | **missed: decayed** |
+| T: \|B − A\| / \|C − A\| | ×3.56 | [×3.51, ×3.61] | touched if bottom ≥ 2 | **met: touched** |
+
+**Reading: forgetting is real here, so consolidation stays on #707.**
+
+- Turning test: 1.000 after A (199 of 200 seeds perfect), 0.850 after
+  walking (median 0.875, 10th percentile 0.640, worst 0.287), 1.000 after
+  more turning. 69 of 200 seeds still score ≥ 0.95 after walking.
+- The control loses nothing (−0.000 [−0.000, +0.000]), so the drop comes
+  from walking, not from more training.
+- Walking moved the weights about as far as learning turning did (|B − A| /
+  |A − start| ×0.97), and 3.6× as far as more turning. Walking one-ahead at
+  the end of B: 0.80, as in the facing track.
+- **What the misses are** (reported only; added after the smoke run, which
+  changes no mark): 78% of the misses after walking predict a view the
+  centre never shows, either a side box's back wall (the centre box) or the
+  dark. A side box's look is seen only from the centre, so what it sees
+  already says where it stands. Learning the side-box turns
+  (turn → dark) leaks into the centre's turns through weights the two
+  share (motor and ring inputs). This is interference, not a failure to
+  hold a fact across steps.
