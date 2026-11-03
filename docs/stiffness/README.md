@@ -68,3 +68,27 @@ smallest drop, so the rule picks **λ = 10**. That λ is fixed for the
 judging run.
 
 Run: `cargo run --release --bin stiffness -- --strength 10 --from 1201 --seeds 200`.
+
+## Results (seeds 1201–1400): all three marks met
+
+Judged once, at λ = 10.
+
+| Mark | Estimate | 90% interval | Verdict |
+|---|---|---|---|
+| 1 held: S drop | +0.017 | [+0.012, +0.021] | **met** (top ≤ 0.05) |
+| 2 halved: S drop − ½ P drop | −0.061 | [−0.070, −0.053] | **met** (top ≤ 0) |
+| 3 no regression: P − S walking | −0.014 | [−0.016, −0.012] | **met** (top ≤ 0.02) |
+
+**Reading: stiffness is enough here, so I propose it for #707.**
+
+- Plain drops +0.156 [+0.138, +0.173], which repeats the retention check's
+  −0.150. Stiffness cuts that by about 89%, to +0.017.
+- Walking does not suffer. It improves slightly: one-ahead 0.817 vs
+  0.803. Walking moves the weights less (|B − A| 7.67 vs 10.66).
+- Misses that guess a view the centre never shows: 63% under S vs 79%
+  under P. Fewer misses, and a smaller share of them come from the
+  side-box leak.
+- Walking still stalls at about 0.82. Stiffness fixes forgetting, not
+  holding a fact across steps (#633).
+- Scope: one learner (PC, context units) and one stage pair. Stiffness is
+  off by default and touches nothing in the main apprentice.
