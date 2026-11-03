@@ -26,6 +26,7 @@ pub mod peer;
 pub mod physics;
 pub mod relearn;
 pub mod report;
+pub mod retention;
 pub mod rng;
 pub mod sim;
 pub mod world;
