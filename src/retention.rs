@@ -19,6 +19,9 @@ pub struct Retention {
     /// Steps in the frozen turning test.
     pub test: usize,
     pub rate: f64,
+    /// Per-weight stiffness strength λ for the walking phase, gathered
+    /// during turning (`docs/stiffness`). `None` is the plain learner.
+    pub stiffness: Option<f64>,
 }
 
 /// One seed's results. Test scores are shares of turns predicted right.
@@ -56,6 +59,9 @@ pub fn retain(r: &Retention, seed: u64) -> Result<Kept, NetError> {
         seed ^ 0x5eed,
     )?;
     let start = learner.params();
+    if r.stiffness.is_some() {
+        learner.gather_stiffness();
+    }
     let mut turner = Driver::turning(&world, seed ^ 0xd21e);
     train(&mut learner, &mut world, &mut turner, r.turning);
     let after_a = learner.clone();
@@ -63,6 +69,9 @@ pub fn retain(r: &Retention, seed: u64) -> Result<Kept, NetError> {
     let test = |l: &Learner| turning_test(l, &test_world, seed ^ 0x7e57, r.test).right;
 
     let mut walker = learner.clone();
+    if let Some(strength) = r.stiffness {
+        walker.hold_stiffness(strength);
+    }
     let mut walk_world = world.clone();
     let mut driver = Driver::new(&walk_world, seed ^ 0xa1c);
     let hits = train(&mut walker, &mut walk_world, &mut driver, r.walking);
@@ -82,6 +91,26 @@ pub fn retain(r: &Retention, seed: u64) -> Result<Kept, NetError> {
         moved_walking: distance(&a, &walker.params()),
         moved_turning: distance(&a, &more.params()),
     })
+}
+
+/// Lives `r` on every seed, in parallel, results in seed order.
+pub fn retain_seeds(r: &Retention, seeds: &[u64]) -> Result<Vec<Kept>, NetError> {
+    let workers = std::thread::available_parallelism().map_or(4, |n| n.get());
+    let mut out = Vec::with_capacity(seeds.len());
+    for chunk in seeds.chunks(workers) {
+        let kept = std::thread::scope(|s| {
+            let handles: Vec<_> = chunk
+                .iter()
+                .map(|&seed| s.spawn(move || retain(r, seed)))
+                .collect();
+            handles
+                .into_iter()
+                .map(|h| h.join().unwrap_or_else(|p| std::panic::resume_unwind(p)))
+                .collect::<Result<Vec<_>, NetError>>()
+        })?;
+        out.extend(kept);
+    }
+    Ok(out)
 }
 
 /// Learns online for `steps` steps; returns, for each motor firing that
@@ -200,6 +229,31 @@ mod tests {
         train(&mut l, &mut world, &mut driver, 8_000);
         let score = |l: &Learner| turning_test(l, &test_world, 10, 1_000).right;
         assert!(score(&l) > score(&newborn) + 0.3);
+    }
+
+    fn quick(stiffness: Option<f64>) -> Retention {
+        Retention {
+            turning: 2_000,
+            walking: 2_000,
+            test: 300,
+            rate: 0.05,
+            stiffness,
+        }
+    }
+
+    #[test]
+    fn zero_stiffness_is_the_plain_learner() {
+        let plain = retain(&quick(None), 11).expect("valid shape");
+        assert_eq!(retain(&quick(Some(0.0)), 11).expect("valid shape"), plain);
+    }
+
+    #[test]
+    fn stiffness_shrinks_how_far_walking_moves_the_weights() {
+        let plain = retain(&quick(None), 12).expect("valid shape");
+        let stiff = retain(&quick(Some(30.0)), 12).expect("valid shape");
+        assert!(stiff.moved_walking < plain.moved_walking);
+        assert_eq!(stiff.before, plain.before);
+        assert_eq!(stiff.moved_turning, plain.moved_turning);
     }
 
     #[test]

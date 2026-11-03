@@ -369,6 +369,16 @@ impl Learner {
         self.recall.fill(0.0);
     }
 
+    /// Starts gathering per-weight stiffness (see `Net::gather_stiffness`).
+    pub fn gather_stiffness(&mut self) {
+        self.net.gather_stiffness();
+    }
+
+    /// Brakes later learning by the stiffness gathered so far.
+    pub fn hold_stiffness(&mut self, strength: f64) {
+        self.net.hold_stiffness(strength);
+    }
+
     /// Every weight and bias of its network, flattened.
     pub fn params(&self) -> Vec<f64> {
         self.net.params()
