@@ -20,14 +20,14 @@ scaffolding helps (D7, D28). README.md has the module map.
 | Home test, recognition | docs/home, docs/recognition, docs/excuse, docs/home-extras | src/home.rs, life.rs | baileyrd | active | this one |
 | Mentor, language, trust, peers | docs/mentor, docs/lessons, docs/language, docs/trust, docs/peers | src/mentor.rs, peer.rs, lessons.rs | baileyrd | parked (D4) | this one |
 | World-physics network | docs/network | src/physics.rs, model.rs | baileyrd | stable | this one |
-| Facing (five-box) and retention | docs/facing, docs/retention | src/facing.rs, gru.rs, eprop.rs, retention.rs | baileyrd | closed / active (#707) | this one |
+| Facing (five-box) and retention | docs/facing, docs/retention, docs/stiffness | src/facing.rs, gru.rs, eprop.rs, retention.rs, network.rs | baileyrd | closed / active (#707) | this one |
 | Judging method | docs/judging | src/judge.rs | baileyrd | stable | this one |
 | Early phases | docs/p1, docs/p2, docs/p3 | src/experiment.rs, adaptation.rs, relearn.rs | baileyrd | stable | this one |
 
 ## Live work (Mill Board, project `apprentice_ai`)
-- #631 review revisit default, due 2026-11-21 · #707 wake/sleep consolidation (retention decayed −0.150)
-- #633 local rule that holds a fact across steps (blocked on Q1) · #544 network vs table strangers-for-home
+- #631 review revisit default, due 2026-11-21 · #707 wake/sleep consolidation (retention decayed −0.150; stiffness proposed, off, D34)
+- #633 local rule that holds a fact across steps (local rules only, GRU+BPTT baseline, D33; non-local main learner is Q11, Nano's call, D35) · #544 network vs table strangers-for-home
 - #444 learning-progress curiosity · #531 network phase (concept layer, network as map prior)
 
 ## Seeds
-Used: 1–700 (main experiments), 1–160 and 201–210 (facing). Next fresh: 701+ (D14).
+Used: 1–700 (main experiments), 1–160 and 201–210 (facing), 1001–1200 (retention), 1201–1400 (stiffness). Next fresh: 701–1000, then 1401+ (D34).
