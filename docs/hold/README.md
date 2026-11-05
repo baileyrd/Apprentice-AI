@@ -2,8 +2,8 @@
 
 Status: approach approved by Nano (2026-11-05). Marks below were pinned
 before any run (D13); design rows are D36–D39. The learning rule changed after
-tuning showed the approved one fails (see § Changes before judging); that
-change awaits Nano's OK. Nothing has run on the judging seeds.
+tuning showed the approved one fails (see § Changes before judging); Nano
+approved the change before judging (D40).
 
 ## The problem
 
