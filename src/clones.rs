@@ -152,12 +152,12 @@ impl Clones {
         let view = self.observe(next);
         let forecast = self.forecast(&self.belief, motor);
         if view == last {
-            let credit = self.into_view(&self.belief, motor, view, |_| 1.0);
+            let credit = self.credit_into(&self.belief, motor, view, |_| 1.0);
             self.add(motor, credit);
         } else {
             if let Some(tag) = self.tag.take() {
                 let own = |j: usize| self.forecast_of(j, motor, view);
-                let credit = self.into_view(&tag.belief, tag.motor, tag.view, own);
+                let credit = self.credit_into(&tag.belief, tag.motor, tag.view, own);
                 self.add(tag.motor, credit);
             }
             self.tag = Some(Tag {
@@ -243,7 +243,7 @@ impl Clones {
     /// Credit for each transition from `belief` by `motor` into `view`'s
     /// clones, each target weighted by `score`, normalised to sum 1.
     /// Entries are (from, to, amount).
-    fn into_view(
+    fn credit_into(
         &self,
         belief: &[f64],
         motor: usize,
