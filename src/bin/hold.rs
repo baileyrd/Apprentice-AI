@@ -59,7 +59,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
         steps: 0,
         window: WINDOW,
         clones: 16,
-        recruit: 4.0,
+        recruit: 5.0,
         persist: 1.0,
         jitter: 0.001,
     };
