@@ -30,4 +30,4 @@ scaffolding helps (D7, D28). README.md has the module map.
 - #444 learning-progress curiosity · #531 network phase (concept layer, network as map prior)
 
 ## Seeds
-Used: 1–700 (main experiments), 1–160 and 201–210 (facing), 1001–1200 (retention), 1201–1400 (stiffness). Next fresh: 701–1000, then 1401+ (D34).
+Used: 1–700 (main experiments), 1–160 and 201–210 (facing), 1001–1200 (retention), 1201–1400 (stiffness), 701–900 (hold, #633). Next fresh: 901–1000, then 1401+ (D34, D37).

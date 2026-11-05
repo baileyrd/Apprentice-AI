@@ -269,6 +269,10 @@ fn judge(a: &Args, clones: &[Score]) -> Result<(), String> {
             "3 leak check:    no-memory median one-ahead {none:.2} (<= {NO_MEMORY_CEILING}): {ok}"
         );
     }
+    if a.stage == Stage::Turning {
+        println!("world verdict: none (turning is a sanity row, not judged)");
+        return Ok(());
+    }
     let held = matches!((m1, m2), (Verdict::Met, Verdict::Met));
     println!(
         "world verdict: {}",

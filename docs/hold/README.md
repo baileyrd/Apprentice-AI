@@ -152,3 +152,45 @@ fresh 901–1000, then 1401+.
 `cargo run --release --bin hold -- --from F --seeds N`. Existing facing
 outputs stay byte-identical (D30). Off everywhere else; using it in the grid
 apprentice would be a D1 change.
+
+## Results (judged once, seeds 701–900, commit c479d3b)
+
+Medians over 200 seeds; accuracy over the last 100 scored steps; probes frozen
+for the second half.
+
+| World | Learner | One-ahead | Two-ahead | After stares ≥ 5 | Heading probe | Centre-direction probe | Seeds passing |
+|---|---|---|---|---|---|---|---|
+| Matching, no ring | clones | 1.00 | 1.00 | 1.00 | 1.00 | — | 200/200 |
+| | gated context | 0.76 | 0.75 | 0.75 | 0.56 | — | 0/200 |
+| | no memory | 0.74 | 0.74 | 0.75 | 0.69 | — | 0/200 |
+| Walking + ring | clones | 0.99 | 0.98 | 0.98 | 1.00 | 0.97 | 194/200 |
+| | gated e-prop | 0.86 | 0.84 | 0.86 | 0.90 | 0.50 | 0/200 |
+| | GRU+BPTT (ceiling) | 1.00 | 1.00 | 1.00 | — | 0.89 | 200/200 |
+| Turning (sanity) | clones | 1.00 | 1.00 | 1.00 | 1.00 | — | 200/200 |
+| | gated context | 1.00 | 1.00 | 1.00 | 0.59 | — | 200/200 |
+
+**Marks:**
+
+| World | 1. Seeds passing (bottom ≥ 0.95) | 2. Fewer wrong (top ≤ −50%) | 3. Leak |
+|---|---|---|---|
+| Matching | **met**: 200/200, [0.987, 1.000] | **met**: −96% [−96%, −96%]; raw 24.61 → 0.00 wrong per 100 (−24.61) | no leak (0.74) |
+| Walking | **unclear**: 194/200, [0.943, 0.984] | **met**: −87% [−88%, −86%]; raw 14.63 → 1.43 wrong per 100 (−13.21) | — |
+
+**Reading: #633 is not met as pinned.** Matching is met. Walking meets mark 2
+but is unclear on mark 1. This is not a miss, so Q11 does not come up.
+
+- **The six walking seeds that failed.** Five sit at 0.94 one-ahead, one
+  wrong prediction short of 0.95 in a 100-step window: 713, 732, 735, 745
+  and 884. Their two-ahead is 0.92–0.94 and after-stare 0.93–0.98. Seed 809
+  is a real failure: one-ahead 0.82, centre-direction probe 0.60. Cause
+  unchecked.
+- **What the clones hold.** Heading is read off the belief at 1.00 in
+  matching, where every earlier local learner read it at about 0.5 on the
+  look-alike boxes. Where the centre lies is read at 0.97 in walking (GRU
+  0.89, gated e-prop 0.50). The compass place probe reads 0.96 against the
+  GRU's 0.38, so the clones keep place on the compass as well as relative to
+  heading.
+- **Turning** is a sanity row and isn't judged. Both learners make no
+  mistakes, so the paired mark has nothing to measure.
+
+Seeds 701–900 are now spent; next fresh 901–1000, then 1401+.
