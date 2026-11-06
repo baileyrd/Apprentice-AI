@@ -11,6 +11,7 @@
 //!
 //! Separate from the grid world: nothing here touches the main apprentice.
 
+use crate::clones::{Clones, Settings};
 use crate::eprop::Eprop;
 use crate::gru::{Gru, Sample, Training};
 use crate::network::{Learning, Net, NetError};
@@ -678,6 +679,99 @@ pub fn live_eprop(life: &EpropLife, seed: u64) -> Score {
         ring: true,
         steps: life.steps,
         rate: life.rate,
+        window: life.window,
+    };
+    score(world, learner, &as_life, seed)
+}
+
+/// The clone learner on the facing body (docs/hold). Probes read its
+/// belief, padded or cut to `width` clones.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClonesLearner {
+    clones: Clones,
+    width: usize,
+}
+
+impl ClonesLearner {
+    pub fn new(clones: Clones, width: usize) -> Self {
+        Self { clones, width }
+    }
+
+    fn padded(&self, belief: &[f64]) -> Vec<f64> {
+        let mut h = belief.to_vec();
+        h.resize(self.width, 0.0);
+        h
+    }
+}
+
+impl Predictor for ClonesLearner {
+    fn width(&self) -> usize {
+        self.width
+    }
+
+    fn foresee(&self, percept: &[f64], motor: usize, after: usize) -> [Vec<f64>; 3] {
+        if !self.clones.started() {
+            let zeros = vec![0.0; percept.len()];
+            return [vec![0.0; self.width], zeros.clone(), zeros];
+        }
+        let now = self.clones.belief();
+        let one = self.clones.forecast(now, motor);
+        let two = self.clones.forecast(&one, after);
+        [
+            self.padded(now),
+            self.clones.expected(&one),
+            self.clones.expected(&two),
+        ]
+    }
+
+    fn learn(&mut self, percept: &[f64], motor: usize, next: &[f64]) {
+        if !self.clones.started() {
+            self.clones.start(percept);
+        }
+        self.clones.step(motor, next);
+    }
+}
+
+/// The clone learner's settings (see `docs/hold/README.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ClonesLife {
+    pub stage: Stage,
+    pub ring: bool,
+    pub steps: usize,
+    pub window: usize,
+    pub clones: usize,
+    pub recruit: f64,
+    pub persist: f64,
+    pub jitter: f64,
+}
+
+/// Views the probes read the belief of; later views are left out of the
+/// probes only.
+pub const PROBED_VIEWS: usize = 32;
+
+/// Lives `life` on `seed` with the clone learner and scores it like
+/// [`live`].
+pub fn live_clones(life: &ClonesLife, seed: u64) -> Score {
+    let world = World::new(life.stage, seed);
+    let settings = Settings {
+        look: FEATURES,
+        ring: if life.ring { SIDES } else { 0 },
+        motors: world.motors(),
+        clones: life.clones,
+        recruit: life.recruit,
+        persist: life.persist,
+        jitter: life.jitter,
+    };
+    let learner = ClonesLearner::new(
+        Clones::new(settings, seed ^ 0x5eed),
+        PROBED_VIEWS * life.clones,
+    );
+    let as_life = Life {
+        stage: life.stage,
+        memory: Memory::None,
+        ring: life.ring,
+        steps: life.steps,
+        rate: 0.0,
         window: life.window,
     };
     score(world, learner, &as_life, seed)
