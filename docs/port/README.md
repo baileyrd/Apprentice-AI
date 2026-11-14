@@ -20,9 +20,9 @@ gets. The tight coupling is on the **agent and harness** side:
 3. Every test of the apprentice (home, false hopes, relearn) is typed to the
    concrete `Apprentice<Memory>` and reads its insides.
 
-The fix is small: one trait with three events, one runner that owns the
-order, an optional probe trait for tests that need to look inside, and an
-out-of-process adapter so a Python or LLM agent can plug in without Rust.
+The fix is small: one trait with three events, one fallible runner that owns
+the order, measures whose type bounds say what they need (so no agent fakes
+a probe), and an out-of-process adapter so a Python or LLM agent can plug in without Rust.
 
 ## What is coupled today
 
@@ -79,8 +79,8 @@ Disclosed, not sent:
 
 ```rust
 // src/agent.rs
-/// Anything that can live in the world. The world talks to it only through
-/// these three events, in the order the runner fixes.
+/// Anything that can live in the world, in process. The world talks to it
+/// only through these events, in the order the runner fixes.
 pub trait Agent {
     /// Chooses the next action from what it senses.
     fn act(&mut self, obs: &Observation) -> Action;
@@ -88,10 +88,12 @@ pub trait Agent {
     fn feel(&mut self, _outcome: &Outcome) {}
     /// Hears `said` about square `at`, relative to its wake square.
     fn hear(&mut self, _at: Pos, _said: Said) {}
+    /// Its own name for the world it thinks it is in, if it keeps one.
+    /// Read by the home test; never sent to it.
+    fn place(&self) -> Option<usize> { None }
 }
 
 // src/apprentice.rs: control moves to Agent; Mind keeps only looking inside.
-/// Optional window into an agent, for measures that need its beliefs.
 pub trait Mind: Agent {
     fn surprise(&self) -> f64;
     fn believes(&self, at: Pos) -> Option<Cell>;
@@ -100,15 +102,32 @@ pub trait Mind: Agent {
 ```
 
 `Apprentice` and `Watched` implement `Agent` (moving their `act`, `feel` and
-`hear` bodies unchanged) and `Mind`. `Mind` keeps its name, so call sites
-barely move, and no option is removed (D1). Proof: a golden test records the
-`StepRecord` stream of several lives on spent seeds before the change and
-asserts it is identical after.
+`hear` bodies unchanged) and `Mind`. `Apprentice::place` returns
+`map_in_use()`. `Mind` keeps its name and its methods, so no option is removed
+(D1); retiring `map_in_use` in favour of `place` would be its own PR.
 
-### PR B: one runner that owns the order
+### PR B: one runner that owns the order and can fail
+
+The runner talks to a **fallible** port. In-process agents get it for free
+with an error type that cannot exist, so their callers never handle an
+error that can't happen; a plugged agent's errors stop the life.
 
 ```rust
 // src/episode.rs (new)
+/// What the runner talks to. `Error` is `Infallible` for in-process agents.
+pub trait Port {
+    type Error: std::error::Error;
+    fn act(&mut self, obs: &Observation) -> Result<Action, Self::Error>;
+    fn feel(&mut self, outcome: &Outcome) -> Result<(), Self::Error>;
+    fn hear(&mut self, at: Pos, said: Said) -> Result<(), Self::Error>;
+    fn place(&self) -> Option<usize>;
+}
+
+impl<A: Agent> Port for A {
+    type Error = Infallible;
+    // each method wraps the Agent method in Ok
+}
+
 /// Something in the world that speaks: a mentor today.
 pub trait Speaker {
     /// Before the agent senses this step.
@@ -120,32 +139,66 @@ pub trait Speaker {
 /// One step, as the experimenter sees it (the agent never sees `pos`).
 pub struct Step { pub pos: Pos, pub obs: Observation, pub action: Action, pub outcome: Outcome }
 
-/// Lives `steps` in `sim`. Each step: say -> hear, observe -> act, step ->
-/// feel, foretell -> hear. `watch` sees every step after the agent felt it.
-pub fn run<A: Agent>(
+/// The experimenter's two looks per step. Both default to doing nothing.
+pub trait Watch<P> {
+    /// Before anything is said or sensed this step: the agent as it was
+    /// after the last step. False hopes are read here.
+    fn before(&mut self, _agent: &P, _sim: &Sim) {}
+    /// After the agent felt the step and heard any foretelling.
+    fn after(&mut self, _agent: &P, _sim: &Sim, _step: &Step) {}
+}
+
+/// Where in the step the agent failed, and when.
+pub struct RunError<E> { pub t: u64, pub during: Phase, pub cause: E }
+pub enum Phase { Hear, Act, Feel }
+
+/// Lives `steps` in `sim`. Each step, in this order:
+/// watch.before; say -> hear; observe -> act; sim.step; feel;
+/// foretell -> hear; watch.after.
+pub fn run<P: Port>(
     sim: &mut Sim,
-    agent: &mut A,
+    agent: &mut P,
     speakers: &mut [&mut dyn Speaker],
     steps: usize,
-    watch: impl FnMut(&A, &Sim, &Step),
-);
+    watch: &mut impl Watch<P>,
+) -> Result<(), RunError<P::Error>>;
 ```
 
-`Mentor` implements `Speaker` (its existing two methods). `Speaker` has
-two real users from the start: honest and blind mentors, and the foretelling
+Failure rules: the first error ends the life and is returned with its step
+and phase. A failed `act` returns **before** `sim.step`, so the world does
+not move and nothing is felt. A failed `feel` or `hear` returns at once; the
+step already taken stays taken and `watch.after` is not called for it. In
+process, `RunError<Infallible>` cannot be built, so library callers unwrap
+it with `match e.cause {}` and keep their current `Result<_, SimError>`
+signatures.
+
+`Mentor` implements `Speaker` (its existing two methods). `Speaker` has two
+real users from the start: honest and blind mentors, and the foretelling
 mentors that take turns. Peers stay as they are; a peer speaks from another
 mind, which is a multi-agent runner, not this one.
 
-Migration, one library module per commit, each checked byte-identical on
-spent seeds: `life`, `home`, `adaptation`, `relearn`, `lessons`,
-`experiment`. Then `life` and `home` become generic over `A: Mind` instead of
-`Apprentice<Memory>`. Bins move later, or not at all; nothing forces them.
+**Measures, and why no agent fakes a probe.** Measures live in watchers,
+and a watcher's type bound says what it needs:
+- **Behaviour** (sleeps, meals, futile eats) is `impl<P: Port> Watch<P>`. It
+  reads only `Step` and `Sim`. Every agent gets these. Marks reward meals and
+  sleeps and only report false hopes (D23), so this is the core.
+- **Home answer** reads `Port::place()`, which every port has. An agent whose
+  place is `None` at the end of its home life gets "n/a" for the test. The
+  apprentice always has one (memory.rs:866), so its answers don't change.
+- **Probes** (false hopes, memory traffic, surprise) are watchers typed to the
+  learner, `impl Watch<Learner>`, reading `model().predict(..)[Food]` in
+  `before` and `model().traffic()` exactly as life.rs does today. A foreign
+  agent can't be given them (it won't compile), so its report shows "n/a".
+  No probe trait for foreign agents is proposed: none has a second user yet.
 
-Measures then split in two:
-- **Behaviour** (sleeps, meals, futile eats) needs only `Step`. Every agent
-  gets these. Marks reward meals and sleeps and only report false hopes (D23), so this is the core.
-- **Probe** (false hopes, surprise, home answer, memory traffic) needs `Mind`.
-  An agent without a probe gets "n/a", never "wrong".
+Migration, one library module per commit: `life`, `home`, `adaptation`,
+`relearn`, `lessons`, `experiment`. Each keeps its public `Learner`-typed
+functions as thin wrappers (no signature change) over a core generic in
+`P: Port`. Bins move later, or not at all; nothing forces them.
+
+**Golden checks**, before the first commit and after each: on spent seeds,
+the `StepRecord` stream of each harness **and** what it reports (`Stay`,
+home answers, the judged bins' CSV and table output) are byte-identical.
 
 ### PR C: out-of-process agents (the plug for other models)
 
@@ -157,15 +210,28 @@ for no gain at one agent per process.
 
 ```rust
 // src/plug.rs (new)
-/// An agent in another process. Implements Agent (and Mind, when it reports
-/// a place).
+/// An agent in another process. Implements `Port` (never `Agent`, whose
+/// methods can't fail).
 pub struct Plugged { child: Child, stdin: ChildStdin, stdout: BufReader<ChildStdout>, place: Option<usize> }
 
 impl Plugged {
     /// Launches `cmd`, passing the agent's seed as its last argument.
     pub fn launch(cmd: &[String], seed: u64) -> Result<Self, PlugError>;
 }
+
+impl Port for Plugged {
+    type Error = PlugError;
+    // act: write `sense`, read one line, parse; keeps the last `place` sent.
+    // feel/hear: write one line.
+    // place: the last id the agent reported, or None if it never sent one.
+}
+
+/// What went wrong talking to the process; carries the offending line.
+pub enum PlugError { Launch(io::Error), Write(io::Error), Read(io::Error), Closed, BadReply { line: String, why: String } }
 ```
+
+`place` is decided per reply, not per type: a plugged agent always has
+`place()`, and it is `None` until the agent first sends one.
 
 Wire format, one JSON object per line:
 
@@ -181,10 +247,13 @@ Only `sense` expects a reply. The process is launched per life (and per
 home-test trial, see coupling 6) and closed when the life ends; there is no
 end-of-world message.
 
-Errors: a bad line, an unknown action or a dead process is a
-`PlugError` with the line and step attached, returned up through `run`
-(which becomes `Result` for plugged agents). Never a panic, never a silent
-`Rest`.
+Failure-path tests, pinned with the golden checks. Each uses a tiny scripted
+child and asserts the `RunError` phase and step, that the world's `t` did not
+advance on an `act` failure, and that nothing further was written:
+- a reply that isn't JSON, or has no `act`, or names an unknown action;
+- the child exits before replying to `sense`;
+- the child closes stdin, so writing `felt` or `heard` fails;
+- the command can't be launched.
 
 **Home test for a black box (D42).** `place` is any small integer the agent
 picks to name the world it thinks it is in. It goes from agent to world, so it
