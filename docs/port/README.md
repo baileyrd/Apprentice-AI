@@ -4,8 +4,8 @@ Nano's ask (2026-11-14): test other AI models in the world sim. Separate the
 agent's decisions from the simulation behind a strict boundary: the world is
 a stream of events, the agent a black-box controller.
 
-**Status: proposal.** Nothing here is built. Code starts only after Nano
-approves, and then in three PRs (A, B, C below), each on its own. The
+**Status: approved by Nano 2026-11-14** (D43). Nothing here is built yet.
+Code goes in three PRs (A, B, C below), each on its own. The
 apprentice's judged results must stay byte-identical throughout (D30).
 
 ## Short answer
@@ -289,7 +289,12 @@ the apprentice's main learner would be Q11, Nano's call (D35).
 
 ## For Nano to decide
 
-1. Approve the plan and its order (A, then B, then C)? A and B are
-   refactors with byte-identical outputs; C adds a module and a bin.
+Both answered by Nano on 2026-11-14 ("Go", D43):
+
+1. Approve the plan and its order (A, then B, then C)? **Approved.** A and B
+   are refactors with byte-identical outputs; C adds a module and a bin. Each
+   goes in its own PR.
 2. Q12: is a self-reported `place` id the right home-test answer for a black
-   box, or should foreign agents skip the home test in v1?
+   box, or should foreign agents skip the home test in v1? **The optional
+   `place` id**, scored as `map_in_use` is; an agent that never sends one is
+   reported n/a (D42).
