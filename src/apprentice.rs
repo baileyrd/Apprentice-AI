@@ -70,6 +70,14 @@ impl<A: Agent> Agent for Watched<A> {
     fn feel(&mut self, outcome: &Outcome) {
         self.agent.feel(outcome);
     }
+
+    fn hear(&mut self, at: Pos, said: Said) {
+        self.agent.hear(at, said);
+    }
+
+    fn place(&self) -> Option<usize> {
+        self.agent.place()
+    }
 }
 
 impl<A: Agent> Mind for Watched<A> {
@@ -498,6 +506,39 @@ mod tests {
     use crate::sim::Event;
 
     const ORIGIN: Pos = Pos { x: 0, y: 0 };
+
+    /// Keeps what it hears and names place 7.
+    #[derive(Default)]
+    struct Sentinel {
+        heard: Vec<(Pos, Said)>,
+    }
+
+    impl Agent for Sentinel {
+        fn act(&mut self, _obs: &Observation) -> Action {
+            Action::Rest
+        }
+        fn hear(&mut self, at: Pos, said: Said) {
+            self.heard.push((at, said));
+        }
+        fn place(&self) -> Option<usize> {
+            Some(7)
+        }
+    }
+
+    #[test]
+    fn watching_keeps_the_agents_ears_and_place() {
+        use crate::body::Voice;
+        let mut watched = Watched::new(Sentinel::default(), Rates::default());
+        let said = Said {
+            voice: Voice(2),
+            word: Word(5),
+        };
+        watched.hear(Pos { x: 3, y: -1 }, said);
+        assert_eq!(watched.agent.heard, [(Pos { x: 3, y: -1 }, said)]);
+        assert_eq!(watched.place(), Some(7));
+        let reflex = Watched::new(ReflexAgent::new(0), Rates::default());
+        assert_eq!(reflex.place(), None);
+    }
 
     fn obs(view: [Cell; VIEW * VIEW], energy: u32) -> Observation {
         Observation {
