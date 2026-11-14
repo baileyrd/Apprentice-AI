@@ -253,14 +253,16 @@ advance on an `act` failure, and that nothing further was written:
 - a reply that isn't JSON, or has no `act`, or names an unknown action;
 - the child exits before replying to `sense`;
 - the child closes stdin, so writing `felt` or `heard` fails;
-- the command can't be launched.
+
+One more test sits outside the run: a command that can't be launched makes
+`Plugged::launch` return `PlugError::Launch` before any step.
 
 **Home test for a black box (D42).** `place` is any small integer the agent
 picks to name the world it thinks it is in. It goes from agent to world, so it
 tells the agent nothing. It is scored exactly as `map_in_use` is: the id at
 the end of the home life against the id at step 100 and step 300 of each
-trial. An agent that never sends one has no home answer (n/a). Open as Q12
-for Nano.
+trial. An agent that never sends one has no home answer (n/a). Nano chose this
+(Q12, D43).
 
 A tiny `examples/plug/random_agent.py` (stdlib only) and a `bin/plug` that
 runs a plugged agent through the life test and home test and prints the same
