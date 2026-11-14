@@ -7,12 +7,14 @@
 use apprentice::adaptation::{self, Change};
 use apprentice::agent::Agent;
 use apprentice::apprentice::{Apprentice, Drives};
+use apprentice::episode::{After, Step, run_agent};
+use apprentice::experiment;
 use apprentice::home;
 use apprentice::lessons::{self, Course};
 use apprentice::life::{self, Learner};
 use apprentice::memory::{Memory, Recall};
 use apprentice::mentor::{Foretell, Mentor, Teaching};
-use apprentice::model::Rates;
+use apprentice::model::{PredictiveCoding, Rates};
 use apprentice::relearn;
 use apprentice::sim::{Config, Sim};
 
@@ -97,7 +99,8 @@ fn lessons_course() {
 }
 
 /// A mentor that names, hints and foretells: say before sensing, foretell
-/// after feeling, as the mentor and foretell experiments do.
+/// after feeling, as the mentor and foretell experiments do, through the
+/// one runner.
 #[test]
 fn mentor_speaks_and_is_heard() {
     let mut sim = Sim::new(life::bushes(), SEED).expect("room");
@@ -109,16 +112,26 @@ fn mentor_speaks_and_is_heard() {
     };
     let mut mentor = Mentor::new(teaching, SEED);
     let mut log = Vec::new();
-    for _ in 0..600 {
-        if let Some((at, said)) = mentor.say(&sim) {
-            mind.hear(at, said);
-        }
-        let outcome = sim.step(mind.act(&sim.observe()));
-        mind.feel(&outcome);
-        if let Some((at, said)) = mentor.foretell(&sim, &outcome) {
-            mind.hear(at, said);
-        }
-        log.push((sim.pos(), outcome));
-    }
+    let mut watch = After(|_: &Learner, sim: &Sim, step: &Step| {
+        log.push((sim.pos(), step.outcome));
+    });
+    run_agent(&mut sim, &mut mind, &mut [&mut mentor], 600, &mut watch);
     check("mentor", (log, mind.place()), 0x2c6d_7b7f_5c9e_adf4);
+}
+
+/// A fixed reflex agent while a world model watches, episode by episode.
+#[test]
+fn experiment_episodes() {
+    let setup = experiment::Setup {
+        seed: SEED,
+        episodes: 20,
+        snapshot_at: vec![1, 20],
+        ..experiment::Setup::default()
+    };
+    let model = PredictiveCoding::new(Rates::default());
+    check(
+        "experiment",
+        experiment::run(&setup, model),
+        0x1742_d43f_53dd_ad1e,
+    );
 }
