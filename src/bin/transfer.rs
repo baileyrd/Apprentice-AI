@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use apprentice::adaptation::{Change, Setup};
+use apprentice::agent::Agent;
 use apprentice::apprentice::{Apprentice, Drives, Mind};
 use apprentice::memory::{Memory, Recall};
 use apprentice::metrics::Metrics;

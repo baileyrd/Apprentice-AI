@@ -7,6 +7,7 @@
 //! home?" is answered from its own catalog of maps.
 
 use crate::adaptation::BUSH_DELAY;
+use crate::agent::Agent;
 use crate::apprentice::{Apprentice, Drives, Mind};
 use crate::memory::{Memory, Recall};
 use crate::model::Rates;

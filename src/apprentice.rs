@@ -31,12 +31,9 @@ use crate::rng::Rng;
 use crate::sim::Outcome;
 use crate::world::{Cell, Dir, Pos};
 
-/// A body's controller that also learns a world model.
-pub trait Mind {
-    /// Senses, learns from what it sensed, then chooses.
-    fn act(&mut self, obs: &Observation) -> Action;
-    /// Hears what its last action did.
-    fn feel(&mut self, outcome: &Outcome);
+/// An agent that also learns a world model, and lets experiments look at
+/// it. Control goes through [`Agent`]; this is only the window inside.
+pub trait Mind: Agent {
     /// Surprise at the last observation.
     fn surprise(&self) -> f64;
     /// Most likely kind at `at` (relative to the wake square); `None` if unseen.
@@ -64,7 +61,7 @@ impl<A: Agent> Watched<A> {
     }
 }
 
-impl<A: Agent> Mind for Watched<A> {
+impl<A: Agent> Agent for Watched<A> {
     fn act(&mut self, obs: &Observation) -> Action {
         self.surprise = self.model.observe(obs);
         self.agent.act(obs)
@@ -73,7 +70,9 @@ impl<A: Agent> Mind for Watched<A> {
     fn feel(&mut self, outcome: &Outcome) {
         self.agent.feel(outcome);
     }
+}
 
+impl<A: Agent> Mind for Watched<A> {
     fn surprise(&self) -> f64 {
         self.surprise
     }
@@ -224,13 +223,6 @@ impl<M: WorldModel> Apprentice<M> {
     /// Its model, to change from outside (for experiments that wipe it).
     pub fn model_mut(&mut self) -> &mut M {
         &mut self.model
-    }
-
-    /// A mentor says `said` about the square at `at` (relative to the wake
-    /// square).
-    pub fn hear(&mut self, at: Pos, said: Said) {
-        self.told.insert(at, said.word);
-        self.model.hear(at, said);
     }
 
     /// What `word` has turned out to mean; `None` if never checked.
@@ -404,7 +396,7 @@ impl<M: WorldModel> Apprentice<M> {
     }
 }
 
-impl<M: WorldModel> Mind for Apprentice<M> {
+impl<M: WorldModel> Agent for Apprentice<M> {
     fn act(&mut self, obs: &Observation) -> Action {
         self.t += 1;
         self.learn_volatility(obs);
@@ -438,6 +430,20 @@ impl<M: WorldModel> Mind for Apprentice<M> {
         *slot += rate * (felt - *slot);
     }
 
+    /// A mentor says `said` about the square at `at` (relative to the wake
+    /// square).
+    fn hear(&mut self, at: Pos, said: Said) {
+        self.told.insert(at, said.word);
+        self.model.hear(at, said);
+    }
+
+    /// The map it is using names the world it thinks it is in.
+    fn place(&self) -> Option<usize> {
+        self.model.map_in_use()
+    }
+}
+
+impl<M: WorldModel> Mind for Apprentice<M> {
     fn surprise(&self) -> f64 {
         self.surprise
     }

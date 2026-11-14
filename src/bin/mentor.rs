@@ -10,7 +10,8 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use apprentice::adaptation::{Change, Setup};
-use apprentice::apprentice::{Apprentice, Drives, Mind};
+use apprentice::agent::Agent;
+use apprentice::apprentice::{Apprentice, Drives};
 use apprentice::memory::{Memory, Recall};
 use apprentice::mentor::{Mentor, Teaching};
 use apprentice::metrics::Metrics;

@@ -14,7 +14,8 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use apprentice::adaptation::{Change, Setup};
-use apprentice::apprentice::{Apprentice, Drives, Mind};
+use apprentice::agent::Agent;
+use apprentice::apprentice::{Apprentice, Drives};
 use apprentice::body::{Said, Voice};
 use apprentice::memory::{Memory, Recall};
 use apprentice::model::{Rates, WorldModel, kind};
