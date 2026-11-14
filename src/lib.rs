@@ -26,6 +26,7 @@ pub mod patroller;
 pub mod patterns;
 pub mod peer;
 pub mod physics;
+pub mod plug;
 pub mod relearn;
 pub mod report;
 pub mod retention;

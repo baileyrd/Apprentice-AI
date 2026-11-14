@@ -4,9 +4,13 @@ Nano's ask (2026-11-14): test other AI models in the world sim. Separate the
 agent's decisions from the simulation behind a strict boundary: the world is
 a stream of events, the agent a black-box controller.
 
-**Status: approved by Nano 2026-11-14** (D43). Nothing here is built yet.
-Code goes in three PRs (A, B, C below), each on its own. The
-apprentice's judged results must stay byte-identical throughout (D30).
+**Status: approved by Nano 2026-11-14 (D43); built.** A is PR #50, B is
+PR #51 (with generic `life::behave` and `life::home_trial` for any port), C
+adds `plug.rs` and `bin/plug`. The apprentice's outputs stayed
+byte-identical throughout (D30; `tests/golden.rs`).
+
+**Try it:** `cargo run --release --bin plug -- python3 examples/plug/random_agent.py`
+runs the stdlib example beside the apprentice on spent seeds 101-102.
 
 ## Short answer
 
