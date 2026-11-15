@@ -31,12 +31,9 @@ use crate::rng::Rng;
 use crate::sim::Outcome;
 use crate::world::{Cell, Dir, Pos};
 
-/// A body's controller that also learns a world model.
-pub trait Mind {
-    /// Senses, learns from what it sensed, then chooses.
-    fn act(&mut self, obs: &Observation) -> Action;
-    /// Hears what its last action did.
-    fn feel(&mut self, outcome: &Outcome);
+/// An agent that also learns a world model, and lets experiments look at
+/// it. Control goes through [`Agent`]; this is only the window inside.
+pub trait Mind: Agent {
     /// Surprise at the last observation.
     fn surprise(&self) -> f64;
     /// Most likely kind at `at` (relative to the wake square); `None` if unseen.
@@ -64,7 +61,7 @@ impl<A: Agent> Watched<A> {
     }
 }
 
-impl<A: Agent> Mind for Watched<A> {
+impl<A: Agent> Agent for Watched<A> {
     fn act(&mut self, obs: &Observation) -> Action {
         self.surprise = self.model.observe(obs);
         self.agent.act(obs)
@@ -74,6 +71,16 @@ impl<A: Agent> Mind for Watched<A> {
         self.agent.feel(outcome);
     }
 
+    fn hear(&mut self, at: Pos, said: Said) {
+        self.agent.hear(at, said);
+    }
+
+    fn place(&self) -> Option<usize> {
+        self.agent.place()
+    }
+}
+
+impl<A: Agent> Mind for Watched<A> {
     fn surprise(&self) -> f64 {
         self.surprise
     }
@@ -224,13 +231,6 @@ impl<M: WorldModel> Apprentice<M> {
     /// Its model, to change from outside (for experiments that wipe it).
     pub fn model_mut(&mut self) -> &mut M {
         &mut self.model
-    }
-
-    /// A mentor says `said` about the square at `at` (relative to the wake
-    /// square).
-    pub fn hear(&mut self, at: Pos, said: Said) {
-        self.told.insert(at, said.word);
-        self.model.hear(at, said);
     }
 
     /// What `word` has turned out to mean; `None` if never checked.
@@ -404,7 +404,7 @@ impl<M: WorldModel> Apprentice<M> {
     }
 }
 
-impl<M: WorldModel> Mind for Apprentice<M> {
+impl<M: WorldModel> Agent for Apprentice<M> {
     fn act(&mut self, obs: &Observation) -> Action {
         self.t += 1;
         self.learn_volatility(obs);
@@ -438,6 +438,20 @@ impl<M: WorldModel> Mind for Apprentice<M> {
         *slot += rate * (felt - *slot);
     }
 
+    /// A mentor says `said` about the square at `at` (relative to the wake
+    /// square).
+    fn hear(&mut self, at: Pos, said: Said) {
+        self.told.insert(at, said.word);
+        self.model.hear(at, said);
+    }
+
+    /// The map it is using names the world it thinks it is in.
+    fn place(&self) -> Option<usize> {
+        self.model.map_in_use()
+    }
+}
+
+impl<M: WorldModel> Mind for Apprentice<M> {
     fn surprise(&self) -> f64 {
         self.surprise
     }
@@ -492,6 +506,39 @@ mod tests {
     use crate::sim::Event;
 
     const ORIGIN: Pos = Pos { x: 0, y: 0 };
+
+    /// Keeps what it hears and names place 7.
+    #[derive(Default)]
+    struct Sentinel {
+        heard: Vec<(Pos, Said)>,
+    }
+
+    impl Agent for Sentinel {
+        fn act(&mut self, _obs: &Observation) -> Action {
+            Action::Rest
+        }
+        fn hear(&mut self, at: Pos, said: Said) {
+            self.heard.push((at, said));
+        }
+        fn place(&self) -> Option<usize> {
+            Some(7)
+        }
+    }
+
+    #[test]
+    fn watching_keeps_the_agents_ears_and_place() {
+        use crate::body::Voice;
+        let mut watched = Watched::new(Sentinel::default(), Rates::default());
+        let said = Said {
+            voice: Voice(2),
+            word: Word(5),
+        };
+        watched.hear(Pos { x: 3, y: -1 }, said);
+        assert_eq!(watched.agent.heard, [(Pos { x: 3, y: -1 }, said)]);
+        assert_eq!(watched.place(), Some(7));
+        let reflex = Watched::new(ReflexAgent::new(0), Rates::default());
+        assert_eq!(reflex.place(), None);
+    }
 
     fn obs(view: [Cell; VIEW * VIEW], energy: u32) -> Observation {
         Observation {

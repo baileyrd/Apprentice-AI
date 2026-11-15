@@ -8,6 +8,7 @@ use std::collections::HashSet;
 use std::thread;
 
 use crate::adaptation::{Change, Setup};
+use crate::agent::Agent;
 use crate::apprentice::{Apprentice, Drives, Mind};
 use crate::home::{Place, at_home_as, step, world};
 use crate::memory::{Memory, Recall, Traffic};

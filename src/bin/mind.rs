@@ -15,6 +15,7 @@ use std::process::ExitCode;
 
 use serde::Serialize;
 
+use apprentice::agent::Agent;
 use apprentice::apprentice::Mind;
 use apprentice::home::{HOME_STEPS, Learner, Place, at_home, newborn, world};
 use apprentice::memory::{Memory, Recall, Source};

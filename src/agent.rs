@@ -2,18 +2,29 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::body::{Action, Observation};
+use crate::body::{Action, Observation, Said};
 use crate::rng::Rng;
 use crate::sim::Outcome;
-use crate::world::{Cell, Dir};
+use crate::world::{Cell, Dir, Pos};
 
-/// Anything that can live in the world.
+/// Anything that can live in the world. The world reaches it only through
+/// these calls: what it senses, what its action did, and words said to it.
+/// It is never told which world it is in (docs/port).
 pub trait Agent {
     /// Chooses the next action from what it senses.
     fn act(&mut self, obs: &Observation) -> Action;
 
     /// Hears what its last action did. Baselines ignore it; learners won't.
     fn feel(&mut self, _outcome: &Outcome) {}
+
+    /// Hears `said` about the square at `at`, relative to its wake square.
+    fn hear(&mut self, _at: Pos, _said: Said) {}
+
+    /// Its own name for the world it thinks it is in, if it keeps one. Read
+    /// by the home test; never sent to it.
+    fn place(&self) -> Option<usize> {
+        None
+    }
 }
 
 /// Uniformly random actions. The floor.

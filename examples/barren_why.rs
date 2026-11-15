@@ -3,7 +3,8 @@
 use std::collections::HashSet;
 use std::thread;
 
-use apprentice::apprentice::{Apprentice, Drives, Mind};
+use apprentice::agent::Agent;
+use apprentice::apprentice::{Apprentice, Drives};
 use apprentice::body::Action;
 use apprentice::life::{Learner, barren, bushes};
 use apprentice::memory::{Memory, Recall};
