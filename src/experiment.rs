@@ -3,7 +3,8 @@
 //! Fixed map, fixed seed. The reflex baseline drives the body; the world model
 //! only watches and learns, so any drop in surprise is the model's alone.
 
-use crate::agent::{Agent, ReflexAgent};
+use crate::agent::ReflexAgent;
+use crate::episode::{After, Step, run_agent};
 use crate::model::WorldModel;
 use crate::sim::{Config, Sim, SimError};
 use crate::world::{Cell, Grid};
@@ -118,11 +119,11 @@ pub fn run(setup: &Setup, mut model: impl WorldModel) -> Result<Results, SimErro
     let mut snapshots = Vec::new();
     for episode in 1..=setup.episodes {
         let mut total = 0.0;
-        for _ in 0..setup.steps_per_episode {
-            let outcome = sim.step(agent.act(&sim.observe()));
-            agent.feel(&outcome);
+        let mut watch = After(|_: &ReflexAgent, sim: &Sim, _: &Step| {
             total += model.observe(&sim.observe());
-        }
+        });
+        let steps = setup.steps_per_episode as usize;
+        run_agent(&mut sim, &mut agent, &mut [], steps, &mut watch);
         surprise.push(total / setup.steps_per_episode as f64);
         if setup.snapshot_at.contains(&episode) {
             snapshots.push(snapshot(episode, &sim, &model));

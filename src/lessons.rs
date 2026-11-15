@@ -7,6 +7,7 @@
 //! apprentice's mind; it only picks which world it lives in.
 
 use crate::apprentice::Mind;
+use crate::episode::{After, Step, run_agent};
 use crate::metrics::{Metrics, Summary};
 use crate::sim::{Config, Sim, SimError};
 
@@ -28,33 +29,31 @@ pub struct Lesson {
 }
 
 /// Lives `steps` steps in a world built from `config` and `seed`.
-pub fn live(
-    mind: &mut impl Mind,
+pub fn live<M: Mind>(
+    mind: &mut M,
     config: &Config,
     seed: u64,
     steps: u64,
 ) -> Result<Summary, SimError> {
     let mut sim = Sim::new(config.clone(), seed)?;
     let mut metrics = Metrics::default();
-    for _ in 0..steps {
-        let outcome = sim.step(mind.act(&sim.observe()));
-        mind.feel(&outcome);
-        metrics.record(&outcome);
-    }
+    let mut watch = After(|_: &M, _: &Sim, step: &Step| metrics.record(&step.outcome));
+    run_agent(&mut sim, mind, &mut [], steps as usize, &mut watch);
     Ok(metrics.summary())
 }
 
 /// Takes the course; lesson `i` is a world built from `seed + i`.
-pub fn study(mind: &mut impl Mind, course: &Course, seed: u64) -> Result<Vec<Lesson>, SimError> {
+pub fn study<M: Mind>(mind: &mut M, course: &Course, seed: u64) -> Result<Vec<Lesson>, SimError> {
     let mut lessons = Vec::with_capacity(course.lessons.len());
     for (i, config) in course.lessons.iter().enumerate() {
         let mut sim = Sim::new(config.clone(), seed + i as u64)?;
         let (mut steps, mut awake) = (0, 0);
         while steps < course.cap && awake < course.mastery {
-            let outcome = sim.step(mind.act(&sim.observe()));
-            mind.feel(&outcome);
+            let mut slept = false;
+            let mut watch = After(|_: &M, _: &Sim, step: &Step| slept = step.outcome.slept);
+            run_agent(&mut sim, mind, &mut [], 1, &mut watch);
             steps += 1;
-            awake = if outcome.slept { 0 } else { awake + 1 };
+            awake = if slept { 0 } else { awake + 1 };
         }
         lessons.push(Lesson {
             steps,

@@ -19,6 +19,7 @@
 //! adaptation; it was replaced before any result was reported.
 
 use crate::apprentice::Mind;
+use crate::episode::{Step, Watch, run_agent};
 use crate::metrics::{Metrics, Summary};
 use crate::sim::{Config, Event, Regrowth, Sim, SimError};
 use crate::world::{Cell, Pos};
@@ -156,50 +157,68 @@ pub fn cleared(sim: &Sim, mind: &impl Mind, stale: &[Pos]) -> f64 {
 }
 
 /// Lives one life with a change in the middle.
-pub fn run(setup: &Setup, mind: &mut impl Mind) -> Result<Trace, SimError> {
+pub fn run<M: Mind>(setup: &Setup, mind: &mut M) -> Result<Trace, SimError> {
     let mut sim = Sim::new(setup.config.clone(), setup.seed)?;
     let walls = sim.grid().positions_of(Cell::Wall).len();
     let to_move = (walls as f64 * setup.wall_fraction).round() as usize;
-    let mut metrics = Metrics::default();
     let total = setup.warmup + setup.after;
-    let mut surprise = Vec::with_capacity(total);
-    let mut map = Vec::with_capacity(total);
-    let mut first_meal = None;
-    let mut stale = Vec::new();
-    for t in 0..total {
-        if t == setup.warmup {
-            match setup.change {
-                Change::Walls => {
-                    sim.move_walls(to_move);
-                }
-                Change::Food => {
-                    stale = believed_food(&sim, mind);
-                    sim.move_food();
-                }
-            }
+    let mut record = Record {
+        setup,
+        t: 0,
+        metrics: Metrics::default(),
+        surprise: Vec::with_capacity(total),
+        map: Vec::with_capacity(total),
+        first_meal: None,
+        stale: Vec::new(),
+    };
+    run_agent(&mut sim, mind, &mut [], setup.warmup, &mut record);
+    match setup.change {
+        Change::Walls => {
+            sim.move_walls(to_move);
         }
-        let action = mind.act(&sim.observe());
-        let outcome = sim.step(action);
-        mind.feel(&outcome);
-        metrics.record(&outcome);
-        if t >= setup.warmup && first_meal.is_none() && outcome.event == Event::Ate {
-            first_meal = Some(t + 1 - setup.warmup);
+        Change::Food => {
+            record.stale = believed_food(&sim, mind);
+            sim.move_food();
         }
-        surprise.push(mind.surprise());
-        map.push(match setup.change {
-            Change::Walls => accuracy(&sim, mind),
-            Change::Food => cleared(&sim, mind, &stale),
-        });
     }
+    run_agent(&mut sim, mind, &mut [], setup.after, &mut record);
     Ok(Trace {
         change: setup.change,
-        surprise,
-        map,
+        surprise: record.surprise,
+        map: record.map,
         changed_at: setup.warmup,
-        first_meal,
-        stale: stale.len(),
-        summary: metrics.summary(),
+        first_meal: record.first_meal,
+        stale: record.stale.len(),
+        summary: record.metrics.summary(),
     })
+}
+
+/// What [`run`] writes down after each step.
+struct Record<'a> {
+    setup: &'a Setup,
+    t: usize,
+    metrics: Metrics,
+    surprise: Vec<f64>,
+    map: Vec<f64>,
+    first_meal: Option<usize>,
+    /// Food squares believed in when food moved.
+    stale: Vec<Pos>,
+}
+
+impl<M: Mind> Watch<M> for Record<'_> {
+    fn after(&mut self, mind: &M, sim: &Sim, step: &Step) {
+        let warmup = self.setup.warmup;
+        self.metrics.record(&step.outcome);
+        if self.t >= warmup && self.first_meal.is_none() && step.outcome.event == Event::Ate {
+            self.first_meal = Some(self.t + 1 - warmup);
+        }
+        self.surprise.push(mind.surprise());
+        self.map.push(match self.setup.change {
+            Change::Walls => accuracy(sim, mind),
+            Change::Food => cleared(sim, mind, &self.stale),
+        });
+        self.t += 1;
+    }
 }
 
 /// Applies the adaptation rule to a trace.

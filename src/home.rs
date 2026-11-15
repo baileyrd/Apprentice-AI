@@ -8,7 +8,8 @@
 
 use crate::adaptation::BUSH_DELAY;
 use crate::agent::Agent;
-use crate::apprentice::{Apprentice, Drives, Mind};
+use crate::apprentice::{Apprentice, Drives};
+use crate::episode::run_agent;
 use crate::memory::{Memory, Recall};
 use crate::model::Rates;
 use crate::rng::Rng;
@@ -63,8 +64,7 @@ pub fn config() -> Config {
 
 /// One step of `mind` in `sim`.
 pub fn step(sim: &mut Sim, mind: &mut Learner) {
-    let outcome = sim.step(mind.act(&sim.observe()));
-    mind.feel(&outcome);
+    run_agent(sim, mind, &mut [], 1, &mut ());
 }
 
 /// A fresh apprentice and its home, before it has lived there.
@@ -101,10 +101,8 @@ pub fn at_home_as(
     seed: u64,
 ) -> Result<(Learner, Sim, Option<usize>), SimError> {
     let (mut mind, mut sim) = newborn_as(recall, drives, seed)?;
-    for _ in 0..HOME_STEPS {
-        step(&mut sim, &mut mind);
-    }
-    let home_map = mind.map_in_use();
+    run_agent(&mut sim, &mut mind, &mut [], HOME_STEPS, &mut ());
+    let home_map = mind.place();
     Ok((mind, sim, home_map))
 }
 

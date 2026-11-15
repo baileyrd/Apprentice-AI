@@ -12,6 +12,7 @@
 
 use crate::adaptation::accuracy;
 use crate::apprentice::Mind;
+use crate::episode::{Step, Watch, run_agent};
 use crate::metrics::{Metrics, Summary};
 use crate::sim::{Config, Sim, SimError};
 
@@ -59,35 +60,43 @@ impl Learning {
 }
 
 /// Lives A, then B, then A.
-pub fn run(setup: &Setup, mind: &mut impl Mind) -> Result<Trace, SimError> {
+pub fn run<M: Mind>(setup: &Setup, mind: &mut M) -> Result<Trace, SimError> {
     let mut a = Sim::new(setup.config.clone(), setup.seed)?;
     let mut b = Sim::new(setup.config.clone(), setup.seed + 1000)?;
-    let mut metrics = Metrics::default();
     let total = 3 * setup.phase;
-    let mut surprise = Vec::with_capacity(total);
-    let mut map = Vec::with_capacity(total);
-    let mut maps = Vec::with_capacity(total);
-    for t in 0..total {
-        let sim = if (setup.phase..2 * setup.phase).contains(&t) {
-            &mut b
-        } else {
-            &mut a
-        };
-        let action = mind.act(&sim.observe());
-        let outcome = sim.step(action);
-        mind.feel(&outcome);
-        metrics.record(&outcome);
-        surprise.push(mind.surprise());
-        map.push(accuracy(sim, mind));
-        maps.push(mind.map_in_use());
-    }
+    let mut record = Record {
+        metrics: Metrics::default(),
+        surprise: Vec::with_capacity(total),
+        map: Vec::with_capacity(total),
+        maps: Vec::with_capacity(total),
+    };
+    run_agent(&mut a, mind, &mut [], setup.phase, &mut record);
+    run_agent(&mut b, mind, &mut [], setup.phase, &mut record);
+    run_agent(&mut a, mind, &mut [], setup.phase, &mut record);
     Ok(Trace {
-        surprise,
-        map,
-        maps,
+        surprise: record.surprise,
+        map: record.map,
+        maps: record.maps,
         phase: setup.phase,
-        summary: metrics.summary(),
+        summary: record.metrics.summary(),
     })
+}
+
+/// What [`run`] writes down after each step.
+struct Record {
+    metrics: Metrics,
+    surprise: Vec<f64>,
+    map: Vec<f64>,
+    maps: Vec<Option<usize>>,
+}
+
+impl<M: Mind> Watch<M> for Record {
+    fn after(&mut self, mind: &M, sim: &Sim, step: &Step) {
+        self.metrics.record(&step.outcome);
+        self.surprise.push(mind.surprise());
+        self.map.push(accuracy(sim, mind));
+        self.maps.push(mind.map_in_use());
+    }
 }
 
 /// Steps in world B spent on the map in use when A ended: the A/B mix-up.

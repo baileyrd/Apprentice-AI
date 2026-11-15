@@ -9,7 +9,8 @@ use std::thread;
 
 use crate::adaptation::{Change, Setup};
 use crate::agent::Agent;
-use crate::apprentice::{Apprentice, Drives, Mind};
+use crate::apprentice::{Apprentice, Drives};
+use crate::episode::{Step, Watch, run_agent};
 use crate::home::{Place, at_home_as, step, world};
 use crate::memory::{Memory, Recall, Traffic};
 use crate::model::{Rates, WorldModel, kind};
@@ -83,32 +84,54 @@ pub fn live_watched(
     config: Config,
     seed: u64,
     steps: usize,
-    mut watch: impl FnMut(&Learner, &Sim, &Outcome, Pos),
+    watch: impl FnMut(&Learner, &Sim, &Outcome, Pos),
 ) -> Result<Stay, SimError> {
     let mut sim = Sim::new(config, seed)?;
-    let mut eaten: HashSet<Pos> = HashSet::new();
-    let mut stay = Stay::default();
     let before = mind.model().traffic();
-    for t in 0..steps {
-        let here = sim.pos();
-        if t < WINDOW {
-            stay.hopes += false_hopes(mind, &sim, &eaten);
-        }
-        let outcome = sim.step(mind.act(&sim.observe()));
-        mind.feel(&outcome);
-        watch(mind, &sim, &outcome, here);
-        stay.sleeps += u32::from(outcome.slept);
-        match outcome.event {
-            Event::Ate => {
-                stay.meals += 1;
-                eaten.insert(here);
-            }
-            Event::AteNothing if t < WINDOW && eaten.contains(&here) => stay.futile += 1,
-            _ => {}
-        }
-    }
+    let mut counting = Counting {
+        t: 0,
+        eaten: HashSet::new(),
+        stay: Stay::default(),
+        watch,
+    };
+    run_agent(&mut sim, mind, &mut [], steps, &mut counting);
+    let mut stay = counting.stay;
     stay.traffic = since(before, mind.model().traffic());
     Ok(stay)
+}
+
+/// Counts a stay: false hopes before each step is sensed, then meals,
+/// sleeps and futile eats after it, once `watch` has seen it.
+struct Counting<F> {
+    t: usize,
+    eaten: HashSet<Pos>,
+    stay: Stay,
+    watch: F,
+}
+
+impl<F: FnMut(&Learner, &Sim, &Outcome, Pos)> Watch<Learner> for Counting<F> {
+    fn before(&mut self, mind: &Learner, sim: &Sim) {
+        if self.t < WINDOW {
+            self.stay.hopes += false_hopes(mind, sim, &self.eaten);
+        }
+    }
+
+    fn after(&mut self, mind: &Learner, sim: &Sim, step: &Step) {
+        let (outcome, here) = (step.outcome, step.pos);
+        (self.watch)(mind, sim, &outcome, here);
+        self.stay.sleeps += u32::from(outcome.slept);
+        match outcome.event {
+            Event::Ate => {
+                self.stay.meals += 1;
+                self.eaten.insert(here);
+            }
+            Event::AteNothing if self.t < WINDOW && self.eaten.contains(&here) => {
+                self.stay.futile += 1;
+            }
+            _ => {}
+        }
+        self.t += 1;
+    }
 }
 
 /// Squares it ate from, now in view and empty, to which it gave more than
@@ -217,7 +240,7 @@ fn home_test(setting: Setting, seed: u64) -> Result<((u32, u32), u32), SimError>
         let mut sim = world(place, &home, seed);
         for s in 1..=TRIAL_STEPS {
             step(&mut sim, &mut mind);
-            let right = (mind.map_in_use() == home_map) == place.is_home();
+            let right = (mind.place() == home_map) == place.is_home();
             if s == ASKED {
                 wrong.0 += u32::from(!right);
                 strangers += u32::from(!right && !place.is_home());

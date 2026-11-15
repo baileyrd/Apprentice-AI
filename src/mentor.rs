@@ -26,6 +26,7 @@
 use std::collections::{HashSet, VecDeque};
 
 use crate::body::{Observation, Said, VIEW, Voice, Word};
+use crate::episode::Speaker;
 use crate::model::{KINDS, kind};
 use crate::rng::Rng;
 use crate::sim::{Event, Outcome, Regrowth, Sim};
@@ -227,6 +228,16 @@ fn nearest(grid: &Grid, from: Pos, goals: &[Pos]) -> Option<Pos> {
         }
     }
     None
+}
+
+impl Speaker for Mentor {
+    fn say(&mut self, sim: &Sim) -> Option<(Pos, Said)> {
+        Mentor::say(self, sim)
+    }
+
+    fn foretell(&mut self, sim: &Sim, outcome: &Outcome) -> Option<(Pos, Said)> {
+        Mentor::foretell(self, sim, outcome)
+    }
 }
 
 #[cfg(test)]
