@@ -106,6 +106,10 @@ pub fn at_home_as(
     Ok((mind, sim, home_map))
 }
 
+/// The largest seed [`world`] can build strangers for: their seeds are
+/// `seed * 100 + k + 1`, with `k` below 100.
+pub const MAX_SEED: u64 = (u64::MAX - 100) / 100;
+
 /// The world a trial puts it in; strangers wake it on home's wake square.
 pub fn world(place: Place, home: &Sim, seed: u64) -> Sim {
     match place {
