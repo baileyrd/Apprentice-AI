@@ -33,6 +33,7 @@ Results: [phase 1](docs/p1/README.md), [phase 2](docs/p2/README.md),
 | `sim`       | Energy rules, food regrowth (anywhere or in place), sleep; pure |
 | `agent`     | `Agent` port and two baselines: `random` and `reflex`           |
 | `episode`   | The one step loop: speech, sensing, acting and feeling in a fixed order ([docs/port](docs/port/README.md)) |
+| `plug`      | An agent in another process, spoken to in JSON lines; `bin/plug` runs it beside the apprentice |
 | `metrics`   | Meals, sleeps, bumps, hurts, mean energy, mean time to food     |
 | `model`     | World models: two-layer predictive coding; backprop baseline    |
 | `memory`    | Diary over per-world maps; sleep replay, stiffening, decay      |

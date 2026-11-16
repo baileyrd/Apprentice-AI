@@ -4,9 +4,13 @@ Nano's ask (2026-11-14): test other AI models in the world sim. Separate the
 agent's decisions from the simulation behind a strict boundary: the world is
 a stream of events, the agent a black-box controller.
 
-**Status: approved by Nano 2026-11-14** (D43). Nothing here is built yet.
-Code goes in three PRs (A, B, C below), each on its own. The
-apprentice's judged results must stay byte-identical throughout (D30).
+**Status: approved by Nano 2026-11-14 (D43); built.** A is PR #50, B is
+PR #51 (with generic `life::behave` and `life::home_trial` for any port), C
+adds `plug.rs` and `bin/plug`. The apprentice's outputs stayed
+byte-identical throughout (D30; `tests/golden.rs`).
+
+**Try it:** `cargo run --release --bin plug -- python3 examples/plug/random_agent.py`
+runs the stdlib example beside the apprentice on spent seeds 101-102.
 
 ## Short answer
 
@@ -212,11 +216,13 @@ for no gain at one agent per process.
 // src/plug.rs (new)
 /// An agent in another process. Implements `Port` (never `Agent`, whose
 /// methods can't fail).
-pub struct Plugged { child: Child, stdin: ChildStdin, stdout: BufReader<ChildStdout>, place: Option<usize> }
+/// Its pipes are worked by a writer thread and a reader thread, so the
+/// world waits at most `deadline` on each write or reply.
+pub struct Plugged { child: Child, /* pipe channels */ deadline: Duration, place: Option<usize> }
 
 impl Plugged {
     /// Launches `cmd`, passing the agent's seed as its last argument.
-    pub fn launch(cmd: &[String], seed: u64) -> Result<Self, PlugError>;
+    pub fn launch(cmd: &[String], seed: u64, deadline: Duration) -> Result<Self, PlugError>;
 }
 
 impl Port for Plugged {
@@ -227,8 +233,14 @@ impl Port for Plugged {
 }
 
 /// What went wrong talking to the process; carries the offending line.
-pub enum PlugError { Launch(io::Error), Write(io::Error), Read(io::Error), Closed, BadReply { line: String, why: String } }
+pub enum PlugError { Launch(io::Error), Write(io::Error), Read(io::Error), Closed, Timeout(Duration), TooLong, BadReply { line: String, why: String } }
 ```
+
+A stuck or babbling agent fails its life instead of hanging the run: a reply
+over `MAX_LINE` (64 KiB) is `TooLong`, a write or reply past the deadline
+(default 10 s, `--deadline-ms`) is `Timeout`, and a failed `act` leaves the
+world unmoved. Ending a life kills and reaps the launched process only, so an
+agent should `exec` its program rather than leave children on the pipes.
 
 `place` is decided per reply, not per type: a plugged agent always has
 `place()`, and it is `None` until the agent first sends one.
